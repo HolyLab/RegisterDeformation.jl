@@ -2,6 +2,7 @@ module RegisterDeformation
 
 using Images, Interpolations, ColorTypes, StaticArrays, HDF5, JLD2, ProgressMeter
 using RegisterUtilities, LinearAlgebra, Base.Cartesian
+using Distributed, Statistics, SharedArrays
 using Base: tail
 import Interpolations: AbstractInterpolation, AbstractExtrapolation
 import ImageTransformations: warp, warp!
@@ -140,15 +141,15 @@ end
 function GridDeformation(u::AbstractArray{T}, knots::NTuple{N}) where {T<:Number,N}
     ndims(u) == N+1 || error("Need $(N+1) dimensions for $N-dimensional deformations")
     size(u,1) == N || error("First dimension of u must be of length $N")
-    uf = convert_to_fixed(SVector{N,T}, u, tail(size(u)))
+    uf = Array(convert_to_fixed(SVector{N,T}, u, tail(size(u))))
     GridDeformation(uf, knots)
 end
 
 # Construct from a (u1, u2, ...) tuple
 function GridDeformation(u::NTuple{N,AbstractArray}, knots::NTuple{N}) where N
     ndims(u[1]) == N || error("Need $N dimensions for $N-dimensional deformations")
-    ua = permutedims(cat(N+1, u...), (N+1,(1:N)...))
-    uf = convert_to_fixed(ua)
+    ua = permutedims(cat(u..., dims=N+1), (N+1,(1:N)...))
+    uf = Array(convert_to_fixed(ua))
     GridDeformation(uf, knots)
 end
 
@@ -170,7 +171,7 @@ correspond to time; `ϕs[i]` is produced from `u[..., i]`.
 function griddeformations(u::AbstractArray{T}, knots::NTuple{N}) where {N,T<:Number}
     ndims(u) == N+2 || error("Need $(N+2) dimensions for a vector of $N-dimensional deformations")
     size(u,1) == N || error("First dimension of u must be of length $N")
-    uf = RegisterDeformation.convert_to_fixed(SVector{N,T}, u, Base.tail(size(u)))
+    uf = Array(convert_to_fixed(SVector{N,T}, u, Base.tail(size(u))))
     griddeformations(uf, knots)
 end
 
@@ -194,16 +195,16 @@ Base.copy(ϕ::GridDeformation{T,N,A,L}) where {T,N,A,L} = (u = copy(ϕ.u); GridD
 # (but there are several challenges, including the lack of a continuous gradient)
 
 function Interpolations.interpolate(ϕ::GridDeformation, BC)
-    itp = scale(interpolate(ϕ.u, BSpline(Quadratic(Flat(OnCell())))), ϕ.knots...)
+    itp = scale(interpolate(ϕ.u, BSpline(Quadratic(BC))), ϕ.knots...)
     GridDeformation(itp)
 end
-Interpolations.interpolate(ϕ::GridDeformation) = interpolate(ϕ, Flat())
+Interpolations.interpolate(ϕ::GridDeformation) = interpolate(ϕ, Flat(OnCell()))
 
 function Interpolations.interpolate!(ϕ::GridDeformation, BC)
-    itp = scale(interpolate!(ϕ.u, BSpline(Quadratic(BC)), OnCell()), ϕ.knots...)
+    itp = scale(interpolate!(ϕ.u, BSpline(Quadratic(BC))), ϕ.knots...)
     GridDeformation(itp)
 end
-Interpolations.interpolate!(ϕ::GridDeformation) = interpolate!(ϕ, InPlace())
+Interpolations.interpolate!(ϕ::GridDeformation) = interpolate!(ϕ, InPlace(OnCell()))
 
 Interpolations.interpolate(ϕ::GridDeformation{T,N,A}) where { T,N,A<:AbstractInterpolation} = error("ϕ is already interpolating")
 
@@ -220,7 +221,7 @@ end
     meta = Expr(:meta, :inline)
     quote
         $meta
-        ux = ϕ.u[$(xindexes...)]
+        ux = ϕ.u($(xindexes...))
         SVector($(ϕxindexes...))
     end
 end
@@ -279,10 +280,15 @@ end
 
 eachknot(knots) = KnotIterator(knots, CartesianIndices(map(length, knots)))
 
-Base.start(ki::KnotIterator) = start(ki.iter)
-Base.done(ki::KnotIterator, state) = done(ki.iter, state)
-function Base.next(ki::KnotIterator, state)
-    I, state = next(ki.iter, state)
+function Base.iterate(ki::KnotIterator)
+    iterate(ki.iter) == nothing && return nothing
+    I, state = iterate(ki.iter)
+    k = knot(ki.knots, I)
+    k, state
+end
+function Base.iterate(ki::KnotIterator, state)
+    iterate(ki.iter, state) == nothing && return nothing
+    I, state = iterate(ki.iter, state)
     k = knot(ki.knots, I)
     k, state
 end
@@ -303,7 +309,7 @@ function regrid(ϕ::InterpolatingDeformation{T,N}, sz::Dims{N}) where {T,N}
     knots_new = map((r,n)->range(first(r), stop=last(r), length=n), ϕ.knots, sz)
     u = Array{SVector{N,T},N}(undef, sz)
     for (i, k) in enumerate(eachknot(knots_new))
-        u[i] = ϕ.u[k...]
+        u[i] = ϕ.u(k...)
     end
     GridDeformation(u, knots_new)
 end
@@ -442,7 +448,7 @@ end
 
 # Create an interpolatable ϕ
 function WarpedArray(data::Extrapolatable{T,N}, ϕ::GridDeformation) where {T,N}
-    itp = scale(interpolate(ϕ.u, BSpline(Quadratic(Flat())), OnCell()), ϕ.knots...)
+    itp = scale(interpolate(ϕ.u, BSpline(Quadratic(Flat(OnCell())))), ϕ.knots...)
     ϕ′ = GridDeformation(itp, ϕ.knots)
     WarpedArray{T,N,typeof(data),typeof(ϕ′)}(data, ϕ′)
 end
@@ -465,7 +471,7 @@ function getindex_impl(N)
     quote
         $meta
         ϕx = W.ϕ[$(indxx...)]
-        W.data[$(indxϕx...)]
+        W.data($(indxϕx...))
     end
 end
 
@@ -542,16 +548,18 @@ warp_type(img::AbstractArray{C}, ::Type{T}) where {C<:Colorant, T} = base_colora
     quote
         size(dest) == size(src) || error("dest must have the same size as src")
         # Can use zip once MAX_TYPE_DEPTH gets bumped, see julia #13561
-        destiter = CartesianRange(size(dest))
-        deststate = start(destiter)
+        destiter = CartesianIndices(size(dest))
+        I, deststate = iterate(destiter)
         for ux in eachvalue(src.ϕ.u)
-            I, deststate = next(destiter, deststate)
-            dest[I] = src.data[$(ϕxindexes...)]
+            dest[I] = src.data($(ϕxindexes...))
+            if deststate == last(destiter)
+                break
+            end
+            I, deststate = iterate(destiter, deststate)
         end
         dest
     end
 end
-
 
 """
 `warp!(dest, img, ϕ)` warps `img` using the deformation `ϕ`.  The
@@ -585,7 +593,7 @@ nimages(img)`.
 """
 function warp!(::Type{T}, dest::Union{IO,HDF5Dataset,JLD2.JLDFile}, img, ϕs; nworkers=1) where T
     n = nimages(img)
-    ssz = size(img, coords_spatial(img)...)
+    ssz = map(d->size(img,d),coords_spatial(img))
     if n == 1
         ϕ = extract1(ϕs, sdims(img), ssz)
         destarray = Array{T}(undef, ssz)
@@ -606,20 +614,23 @@ function warp!(::Type{T}, dest::Union{IO,HDF5Dataset,JLD2.JLDFile}, img, ϕs; nw
     nothing
 end
 
-warp!(::Type{T}, dest::Union{IO,HDF5Dataset,JLD2.JLDFile}, img, u::AbstractArray{R}; kwargs...) where {T,R<:Real} = warp!(T, dest, img, convert_to_fixed(u); kwargs...)
+warp!(::Type{T}, dest::Union{IO,HDF5Dataset,JLD2.JLDFile}, img, u::AbstractArray{R}; kwargs...) where {T,R<:Real} = warp!(T, dest, img, Array(convert_to_fixed(u)); kwargs...)
 
 warp!(dest::Union{HDF5Dataset,JLD2.JLDFile}, img, u; nworkers=1) =
     warp!(eltype(dest), dest, img, u; nworkers=nworkers)
 
 function _warp!(::Type{T}, dest, img, ϕs, nworkers) where T
     n = nimages(img)
-    ssz = size(img, coords_spatial(img)...)
+    ssz = map(d->size(img,d),coords_spatial(img))
     wpids = addprocs(nworkers)
     simg = Vector{Any}()
     swarped = Vector{Any}()
     rrs = Vector{RemoteChannel}()
     mydir = splitdir(@__FILE__)[1]
+    pkgbase = String(chop(mydir,tail=4))
     for p in wpids
+        remotecall_fetch(Main.eval, p, :(using Pkg))
+        remotecall_fetch(Main.eval, p, :(Pkg.activate($pkgbase)))
         remotecall_fetch(Main.eval, p, :(push!(LOAD_PATH, $mydir)))
         remotecall_fetch(Main.eval, p, :(using RegisterDeformation))
         push!(simg, SharedArray{eltype(img)}(ssz, pids=[myid(),p]))
@@ -637,7 +648,7 @@ function _warp!(::Type{T}, dest, img, ϕs, nworkers) where T
             @async begin
                 while (idx = getnextidx()) <= n
                     ϕ = extracti(ϕs, idx, ssz)
-                    copy!(src, view(img, timeaxis(img)(idx)))
+                    copyto!(src, view(img, timeaxis(img)(idx)))
                     remotecall_fetch(warp!, p, warped, src, ϕ)
                     put!(writing_mutex, true)
                     warp_write(dest, warped, idx)
@@ -715,7 +726,7 @@ function knotgrid(::Type{T}, knots::NTuple{N,AbstractRange}) where {T,N}
     for idim = 1:N
         indexes = Any[inds...]
         indexes[idim] = map(x->clamp(round(Int, x), first(inds[idim])+1, last(inds[idim])-1), knots[idim])
-        img[indexes...] = one(T)
+        img[indexes...] .= one(T)
     end
     img
 end
@@ -747,7 +758,7 @@ function warpgrid(ϕ; scale=1, showidentity::Bool=false)
     wimg = warp(img, ϕ)
     if showidentity
         n = ndims(img)+1
-        return reinterpret(RGB{Float32}, permutedims(cat(n, wimg, img, wimg), (n,1:ndims(img)...)))
+        return reinterpret(RGB{Float32}, permutedims(cat(wimg, img, wimg, dims=n), (n,1:ndims(img)...)))
     end
     wimg
 end
@@ -783,7 +794,7 @@ function tinterpolate(ϕsindex, tindex, nstack)
 end
 
 # TODO?: do we need to return real values beyond-the-edge for a SubArray?
-to_etp(img) = extrapolate(interpolate(img, BSpline(Linear()), OnGrid()), convert(promote_type(eltype(img), Float32), NaN))
+to_etp(img) = extrapolate(interpolate(img, BSpline(Linear())), convert(promote_type(eltype(img), Float32), NaN))
 
 to_etp(itp::AbstractInterpolation) = extrapolate(itp, convert(promote_type(eltype(itp), Float32), NaN))
 
@@ -865,13 +876,6 @@ end
 #     args = [:(Tuple(v[$d])) for d = 1:C]
 #     :(SMatrix{Tuple{R,C},T}(($(args...),)))
 # end
-
-include_string(RegisterDeformation, """
-    const RowVectorArray{T} = RowVector{T,Vector{T}}
-
-    Base.reinterpret(::Type{T}, r::RowVectorArray{S}) where {T,S} = reinterpret(T, r.vec)
-    Base.reinterpret(::Type{T}, r::RowVectorArray{S}, dims::Dims{N}) where {T,S,N} = reshape(reinterpret(T, r.vec), dims)
-    """)
 
 # Wrapping functions to interface with CoordinateTransfromations instead of AffineTransfroms module
 tformtranslate(trans::Vector) = (m = length(trans); AffineMap(Matrix{Float64}(I,m,m), trans))

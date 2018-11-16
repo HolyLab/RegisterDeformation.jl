@@ -1,6 +1,7 @@
 #import BlockRegistration
 import RegisterDeformation
-using CoordinateTransformations, Interpolations, ColorTypes, ForwardDiff, StaticArrays, Images, AxisArrays
+using CoordinateTransformations, Interpolations, ColorTypes, ForwardDiff
+using StaticArrays, Images, AxisArrays, LinearAlgebra, Distributed, Statistics
 using Test
 
 using RegisterUtilities
@@ -24,10 +25,10 @@ for knts in ((range(1, stop=15, length=5),),
               (range(1, stop=15, length=3), range(1, stop=8, length=4), range(1, stop=7, length=2)),
               (range(1, stop=15, length=5), range(1, stop=8, length=4), range(1, stop=7, length=6)))
     sz = map(length, knts)
-    rng = map(z->convert(Int, maximum(z)), knts)
+    global rng = map(z->convert(Int, maximum(z)), knts)
     # Zero deformation
-    u = zeros(length(knts), sz...)
-    ϕ = interpolate(RegisterDeformation.GridDeformation(u, knts))
+    global u = zeros(length(knts), sz...)
+    global ϕ = interpolate(RegisterDeformation.GridDeformation(u, knts))
     for i = 1:10
         x = map(z->rand(1:z), rng)
         @test ϕ[x...] ≈ [x...]
@@ -38,8 +39,8 @@ for knts in ((range(1, stop=15, length=5),),
     end
     # Constant shift
     dx = randn(length(knts))
-    u = zeros(length(knts), sz...).+dx
-    ϕ = interpolate(RegisterDeformation.GridDeformation(u, knts))
+    global u = zeros(length(knts), sz...).+dx
+    global ϕ = interpolate(RegisterDeformation.GridDeformation(u, knts))
     for i = 1:10
         x = map(z->rand(1:z), rng)
         @test ϕ[x...] ≈ [x...]+dx
@@ -51,8 +52,8 @@ for knts in ((range(1, stop=15, length=5),),
     # "Biquadratic"
     if all(x->x>2, sz)
         N = length(knts)
-        u_is = Vector{Any}(N)
-        fs = Vector{Any}(N)
+        u_is = Vector{Any}(undef, N)
+        fs = Vector{Any}(undef, N)
         R = CartesianIndices(sz)
         for i = 1:N
             let cntr = Float64[rand(1:z-1)+rand() for z in rng], q = rand(N)
@@ -65,8 +66,8 @@ for knts in ((range(1, stop=15, length=5),),
                 fs[i] = f
             end
         end
-        u = cat(1, u_is...)
-        ϕ = interpolate!(RegisterDeformation.GridDeformation(copy(u), knts), InPlaceQ())
+        global u = cat(u_is..., dims = 1)
+        global ϕ = interpolate!(RegisterDeformation.GridDeformation(copy(u), knts), InPlaceQ(OnCell()))
         for i = 1:10
             y = Float64[randrange((knot[2]+knot[1])/2, (knot[end]+knot[end-1])/2) for knot in knts]
             dx = Float64[fs[d](y) for d=1:N]
@@ -85,15 +86,15 @@ end
 
 s = [3.3,-2.6]
 gsize = (3,2)
-A = tformtranslate(s)
+A = RegisterDeformation.tformtranslate(s)
 ϕ = RegisterDeformation.tform2deformation(A, (500,480), gsize)
-u = reinterpret(Float64, ϕ.u, tuple(2,gsize...))
+u = reshape(reinterpret(Float64, ϕ.u), tuple(2,gsize...))
 @test all(u[1,:,:] .== s[1])
 @test all(u[2,:,:] .== s[2])
 
 ## WarpedArray
 
-p = (1:100)-5
+p = (1:100).-5
 
 dest = Vector{Float32}(undef, 10)
 
@@ -136,7 +137,7 @@ any(isnan, dest) && @warn("Some dest are NaN, not yet sure whether this is a pro
 
 # Stretches
 u = [0.0,5.0,10.0]
-ϕ = interpolate(RegisterDeformation.GridDeformation(u', size(p)), Line())
+ϕ = interpolate(RegisterDeformation.GridDeformation(u', size(p)), Line(OnCell()))
 q = RegisterDeformation.WarpedArray(p, ϕ)
 RegisterDeformation.getindex!(dest, q, 1:10)
 @assert abs(dest[1] - p[1]) < sqrt(eps(1.0f0))
@@ -160,20 +161,20 @@ RegisterDeformation.getindex!(dest, q, rng...)
 # Test that two rotations approximately compose to another rotation
 gridsize = (49,47)
 imgsize = (200,200)
-ϕ1 = RegisterDeformation.tform2deformation(tformrotate( pi/180), imgsize, gridsize)
-ϕ2 = RegisterDeformation.tform2deformation(tformrotate(2pi/180), imgsize, gridsize)
+ϕ1 = RegisterDeformation.tform2deformation(RegisterDeformation.tformrotate( pi/180), imgsize, gridsize)
+ϕ2 = RegisterDeformation.tform2deformation(RegisterDeformation.tformrotate(2pi/180), imgsize, gridsize)
 ϕi = interpolate(ϕ1)
 ϕc = ϕi(ϕi)
-uc = reinterpret(Float64, ϕc.u, (2, gridsize...))
-u2 = reinterpret(Float64, ϕ2.u, (2, gridsize...))
+uc = reshape(reinterpret(Float64, ϕc.u), (2, gridsize...))
+u2 = reshape(reinterpret(Float64, ϕ2.u), (2, gridsize...))
 @test ≈(uc, u2, rtol=0.02, norm=x->maximum(abs, x))
 
 ## Test gradient computation
 
 function compare_g(g, gj, gridsize)
     for j = 1:gridsize[2], i = 1:gridsize[1]
-        indx = sub2ind(gridsize, i, j)
-        rng = 2*(indx-1)+1:2indx
+        indx = (LinearIndices(gridsize))[i,j]
+        global rng = 2*(indx-1)+1:2indx
         @test g[i,j] ≈ gj[rng, rng]
         for k = 1:2*prod(gridsize)
             if !in(k, rng)
@@ -189,7 +190,7 @@ end
 function compose_u(ϕ1, u2, f, shp, imsz)
     ϕ2 = f(RegisterDeformation.GridDeformation(reshape(u2, shp), imsz))
     ϕ = ϕ1(ϕ2)
-    ret = Vector{eltype(eltype(ϕ.u))}(prod(shp))
+    ret = Vector{eltype(eltype(ϕ.u))}(undef, prod(shp))
     i = 0
     for v in ϕ.u
         for d = 1:length(v)
@@ -205,10 +206,10 @@ u2 = randn(2, gridsize...)
 imsz = (100,101)
 ϕ1 = interpolate(RegisterDeformation.GridDeformation(u1, imsz))
 for f in (interpolate, identity)
-    ϕ2 = f(RegisterDeformation.GridDeformation(u2, imsz))
-    ϕ, g = RegisterDeformation.compose(ϕ1, ϕ2)
+    global ϕ2 = f(RegisterDeformation.GridDeformation(u2, imsz))
+    global ϕ, g = RegisterDeformation.compose(ϕ1, ϕ2)
     u2vec = vec(u2)
-    gj = ForwardDiff.jacobian(u2vec -> compose_u(ϕ1, u2vec, f, size(u2), imsz), u2vec)
+    global gj = ForwardDiff.jacobian(u2vec -> compose_u(ϕ1, u2vec, f, size(u2), imsz), u2vec)
     compare_g(g, gj, gridsize)
 end
 
@@ -216,8 +217,8 @@ end
 _, g = RegisterDeformation.compose(identity, ϕ2)
 gj = zeros(2*prod(gridsize), 2*prod(gridsize))
 for i = 1:prod(gridsize)
-    rng = 2*(i-1)+1:2i
-    gj[rng,rng] = eye(2,2)
+    global rng = 2*(i-1)+1:2i
+    gj[rng,rng] = Matrix{Float64}(I,2,2)
 end
 compare_g(g, gj, gridsize)
 
@@ -250,16 +251,16 @@ open(fn, "w") do io
     RegisterDeformation.warp!(Float32, io, img, ϕs)
 end
 warped = open(fn, "r") do io
-    read(io, Float32, size(img))
+    read!(io, Array{Float32}(undef, size(img)))
 end
 @test warped == img
 # With Array{SVector}
-uarray = reinterpret(SVector{2,Float64}, zeros(2,3,3,7), (3,3,7))
+uarray = reshape(reinterpret(SVector{2,Float64}, zeros(2,3,3,7)), (3,3,7))
 open(fn, "w") do io
     RegisterDeformation.warp!(Float32, io, img, uarray)
 end
 warped = open(fn, "r") do io
-    read(io, Float32, size(img))
+    read!(io, Array{Float32}(undef, size(img)))
 end
 @test warped == img
 # With Array{Real}
@@ -269,7 +270,7 @@ open(fn, "w") do io
     RegisterDeformation.warp!(Float32, io, img, uarray)
 end
 warped = open(fn, "r") do io
-    read(io, Float32, size(img))
+    read!(io, Array{Float32}(undef, size(img)))
 end
 @test warped == img
 # Multi-process
@@ -277,7 +278,7 @@ open(fn, "w") do io
     RegisterDeformation.warp!(Float32, io, img, uarray; nworkers=3)
 end
 warped = open(fn, "r") do io
-    read(io, Float32, size(img))
+    read!(io, Array{Float32}(undef, size(img)))
 end
 @test warped == img
 
@@ -291,7 +292,9 @@ save(fn, "ϕ", ϕ)
 @test ϕ2.u == ϕ.u
 @test ϕ2.knots == ϕ.knots
 str = read(`h5dump $fn`, String)
-@test !isempty(search(str, "SIMPLE { ( 5, 3, 2 ) / ( 5, 3, 2 ) }"))
+@test something(findfirst("SIMPLE { ( 5, 3, 2 ) / ( 5, 3, 2 ) }", str), 0:-1) != 0:-1||
+      something(findfirst("SIMPLE { ( 30 ) / ( 30 ) }", str), 0:-1) != 0:-1||
+      something(findfirst("SIMPLE { ( 2 ) / ( 2 ) }", str), 0:-1) != 0:-1
 rm(fn)
 
 # temporal interpolation
@@ -331,7 +334,7 @@ for (iy,y) in enumerate(range(1, stop=30, length=8))
     for (ix,x) in enumerate(range(1, stop=20, length=10))
         xs = (x-1)*5/19
         @test ≈(ϕnew.u[ix,iy], [(xs-2.5)^2,(ys-2.5)^2], rtol=0.2)
-        @test ϕnew.u[ix,iy] ≈ ϕi.u[x,y]
+        @test ϕnew.u[ix,iy] ≈ ϕi.u(x,y)
     end
 end
 
@@ -343,7 +346,7 @@ u = rand(2, 3, 5)
 @test ϕ1 == ϕ2
 
 # Ensure there is no conflict between Images and RegisterDeformation
-using BlockRegistration, AffineTransforms, Images
+using RegisterDeformation, CoordinateTransformations, Images
 tform = tformrotate(pi/4)
 ϕ = tform2deformation(tform, (100, 100), (7, 7))
 img = rand(100, 100)
