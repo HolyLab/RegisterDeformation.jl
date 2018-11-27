@@ -20,7 +20,7 @@ script:
                   LibGit2.with(Pkg.GitTools.clone(url, path; header = "registry $reg from $(repr(url))", credentials = creds)) do repo end
                 end
               end'
-  - julia -e 'using Pkg; Pkg.build(); Pkg.test'
+  - julia -e 'using Pkg; Pkg.build(); Pkg.test("RegisterDeformation"; coverage=false)'
 after_success:
 # update the documentation
   - julia -e 'using Pkg; Pkg.add("Documenter")'
