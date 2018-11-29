@@ -837,13 +837,7 @@ end
 
 # Unlike the one above, this is type-stable
 function convert_to_fixed(::Type{SVector{N,T}}, u::AbstractArray{T}, sz=tail(size(u))) where {T,N}
-    if isbitstype(T)
-        uf = reshape(reinterpret(SVector{N,T}, vec(u)), sz)
-    else
-        uf = Array{SVector{N,T}}(undef, sz)
-        copy_ctf!(uf, u)
-    end
-    uf
+    reshape(reinterpret(SVector{N,T}, vec(u)), sz)
 end
 
 @generated function copy_ctf!(dest::Array{SVector{N,T}}, src::Array) where {N,T}
