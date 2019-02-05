@@ -758,7 +758,7 @@ function warpgrid(ϕ; scale=1, showidentity::Bool=false)
     wimg = warp(img, ϕ)
     if showidentity
         n = ndims(img)+1
-        return reinterpret(RGB{Float32}, permutedims(cat(wimg, img, wimg, dims=n), (n,1:ndims(img)...)))
+        return reshape(reinterpret(RGB{Float32}, permutedims(cat(wimg, img, wimg, dims=n), (n,1:ndims(img)...))),(size(img)...,))
     end
     wimg
 end
