@@ -1,5 +1,6 @@
 using CoordinateTransformations, Requires
 import Interpolations: AbstractExtrapolation
+export TransformedArray
 
 """
 A `TransformedArray` is an `AbstractArray` type with an affine
@@ -27,7 +28,7 @@ function TransformedArray(A::AbstractInterpolation, a::AffineMap)
 end
 
 function TransformedArray(A::AbstractArray, a::AffineMap)
-    itp = interpolate(A, BSpline(Linear()), OnGrid())
+    itp = interpolate(A, BSpline(Linear()))
     TransformedArray(itp, a)
 end
 
@@ -35,13 +36,13 @@ end
 Base.size(A::TransformedArray) = size(A.data)
 
 function Base.getindex(A::TransformedArray{T,2}, i::Number, j::Number) where T
-    x, y = tformfwd(A.tform, i, j)
-    A.data[x, y]
+    x, y = A.tform([i,j]) #tformfwd(A.tform, i, j)
+    A.data(x, y)
 end
 
 function Base.getindex(A::TransformedArray{T,3}, i::Number, j::Number, k::Number) where T
-    x, y, z = tformfwd(A.tform, i, j, k)
-    A.data[x, y, z]
+    x, y, z = A.tform([i,j,k]) #tformfwd(A.tform, i, j, k)
+    A.data(x, y, z)
 end
 
 Base.similar(A::TransformedArray, ::Type{T}, dims::Dims) where T = Array{T}(dims)
@@ -61,14 +62,14 @@ zero-vectors for both of them. Alternatively to make `getindex` behave
 as `transform`, offset the origin of the transform used to construct
 `A` by
 ```
-origin_src - tform.m*origin_dest
+origin_src - tform.linear*origin_dest
 ```
 """
 function transform(A::TransformedArray{T,N}; kwargs...) where {T,N}
-    y = A.tform * ones(Int, N)
+    y = A.tform(ones(Int, N))
     yt = (y...,)::NTuple{N,eltype(y)}
-    a = A.data[yt...]
-    dest = Array{typeof(a)}(size(A))
+    a = A.data(yt...)
+    dest = Array{typeof(a)}(undef, size(A))
     transform!(dest, A; kwargs...)
     dest
 end
@@ -88,11 +89,11 @@ function transform!(dest::AbstractArray{S,N},
                     origin_dest = center(dest),
                     origin_src = center(src)) where {S,T,N}
     tform = src.tform
-    if tform.m == eye(T, N) && tform.v == zeros(N) && size(dest) == size(src) && origin_dest == origin_src
-        copy!(dest, src)
+    if tform.linear == Matrix{T}(I, N, N) && tform.translation == zeros(N) && size(dest) == size(src) && origin_dest == origin_src
+        copyto!(dest, src)
         return dest
     end
-    offset = tform.v - tform.m*origin_dest + origin_src
+    offset = tform.translation - tform.linear*origin_dest + origin_src
     _transform!(dest, src, offset)
 end
 
@@ -117,7 +118,7 @@ end
         tform = src.tform
         data = src.data
         @nexprs $N d->(o_d = offset[d])
-        @nexprs $N j->(@nexprs $N i->(A_i_j = tform.m[i,j]))
+        @nexprs $N j->(@nexprs $N i->(A_i_j = tform.linear[i,j]))
         fill!(dest, data.fillvalue)
         $(sN...)
         @nloops($N,i,d->(d>1 ? (1:size(dest,d)) : (imin:imax)),
@@ -132,7 +133,7 @@ end
                     nothing), # pre
             d->(@nexprs $N e->(s_e_d += A_e_d)), # post
             # Perform the interpolation of the source data
-            @inbounds (@nref $N dest i) = (@nref $N data d->s_d_1)
+            @inbounds (@nref $N dest i) = (@ncall $N data d->s_d_1)
         )
         dest
     end
