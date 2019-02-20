@@ -1,13 +1,13 @@
 module RegisterDeformation
 
 using Images, Interpolations, ColorTypes, StaticArrays, HDF5, JLD2, ProgressMeter
-using RegisterUtilities, LinearAlgebra, Base.Cartesian
+using RegisterUtilities, LinearAlgebra, Rotations, Base.Cartesian
 using Distributed, Statistics, SharedArrays
 using Base: tail
 import Interpolations: AbstractInterpolation, AbstractExtrapolation
 import ImageTransformations: warp, warp!
 # to avoid `scale` conflict:
-import CoordinateTransformations: compose, AffineMap
+import CoordinateTransformations: compose, AffineMap, transform
 include("tformedarrays.jl")
 
 export
@@ -32,7 +32,13 @@ export
     warp!,
     warpgrid,
     tformtranslate,
-    tformrotate
+    tformrotate,
+    tformeye,
+    rotation2,
+    rotation3,
+    rotationparameters,
+    transform!,
+    transform
 
 const DimsLike = Union{Vector{Int}, Dims}
 const InterpExtrap = Union{AbstractInterpolation,AbstractExtrapolation}
@@ -255,7 +261,7 @@ function _compose(uold, unew, x, i)
     dx + vecindex(uold, x+dx)
 end
 
-lookup(u::AbstractInterpolation, x, i) = vecindex(u, x)
+lookup(u::AbstractInterpolation, x, i) = vecindex(extrapolate(u,Flat()), x) # using extrpolate to resove BoundsError
 lookup(u, x, i) = u[i]
 
 @generated function knot(knots::NTuple{N}, i::Integer) where N
@@ -758,7 +764,7 @@ function warpgrid(ϕ; scale=1, showidentity::Bool=false)
     wimg = warp(img, ϕ)
     if showidentity
         n = ndims(img)+1
-        return reinterpret(RGB{Float32}, permutedims(cat(wimg, img, wimg, dims=n), (n,1:ndims(img)...)))
+        return reshape(reinterpret(RGB{Float32}, permutedims(cat(wimg, img, wimg, dims=n), (n,1:ndims(img)...))),(size(img)...,))
     end
     wimg
 end
@@ -872,18 +878,43 @@ end
 # end
 
 # Wrapping functions to interface with CoordinateTransfromations instead of AffineTransfroms module
+tformeye(m::Int) = AffineMap(Matrix{Float64}(I,m,m), zeros(m))
 tformtranslate(trans::Vector) = (m = length(trans); AffineMap(Matrix{Float64}(I,m,m), trans))
 
-rotation2(angle) = [cos(angle) -sin(angle); sin(angle) cos(angle)]
+rotation2(angle) = RotMatrix(angle)
 function tformrotate(angle)
-    A = rotation2(angle)
+    A = RotMatrix(angle)
     AffineMap(A, zeros(eltype(A),2))
 end
 
-#=
+function rotationparameters(R::Matrix)
+    size(R, 1) == size(R, 2) || error("Matrix must be square")
+    if size(R, 1) == 2
+        return [atan(-R[1,2],R[1,1])]
+    elseif size(R, 1) == 3
+        aa = AngleAxis(R)
+        return rotation_angle(aa)*rotation_axis(aa)
+    else
+        error("Rotations in $(size(R, 1)) dimensions not supported")
+    end
+end
+
+function rotation3(axis::Vector{T}, angle) where T
+    n = norm(axis)
+    axisn = n>0 ? axis/n : (tmp = zeros(T,length(axis)); tmp[1] = 1; tmp)
+    AngleAxis(angle, axisn...)
+end
+
+function rotation3(axis::Vector{T}) where T
+    n = norm(axis)
+    axisn = n>0 ? axis/n : (tmp = zeros(typeof(one(T)/1),length(axis)); tmp[1] = 1; tmp)
+    AngleAxis(n, axisn...)
+end
+
+
 function tformrotate(axis::Vector, angle)
     if length(axis) == 3
-        return AffineTransform(rotation3(axis, angle), zeros(eltype(axis),3))
+        return AffineMap(rotation3(axis, angle), zeros(eltype(axis),3))
     else
         error("Dimensionality ", length(axis), " not supported")
     end
@@ -891,13 +922,14 @@ end
 
 function tformrotate(x::Vector)
     if length(x) == 3
-        return AffineTransform(rotation3(x), zeros(eltype(x),3))
+        return AffineMap(rotation3(x), zeros(eltype(x),3))
     else
         error("Dimensionality ", length(x), " not supported")
     end
 end
 
 
+#=
 # The following assumes uaxis is normalized
 function _rotation3(uaxis::Vector, angle)
     if length(uaxis) != 3
