@@ -1,34 +1,36 @@
 #import BlockRegistration
-import RegisterDeformation
+using RegisterDeformation
 using CoordinateTransformations, Interpolations, ColorTypes, ForwardDiff
-using StaticArrays, Images, AxisArrays, LinearAlgebra, Distributed, Statistics
+using StaticArrays, Images, LinearAlgebra, Distributed, Statistics
+using AxisArrays: AxisArray
 using Test
 using RegisterDeformation, RegisterUtilities
+using JLD2, HDF5
+
+@testset "Nodes" begin
+    nodes = (range(1, stop=15, length=5), range(1, stop=11, length=3))
+    @test arraysize(nodes) == (15,11)
+
+    nodesall = (nodes[1].*ones(length(nodes[2]))', ones(length(nodes[1])).*nodes[2]')
+    for (i, knt) in enumerate(eachnode(nodes))
+        @test knt[1] == nodesall[1][i]
+        @test knt[2] == nodesall[2][i]
+    end
+end
 
 @testset "Deformation tests" begin
-    znan(x) = isnan(x) ? zero(x) : x
-
-    knots = (range(1, stop=15, length=5), range(1, stop=11, length=3))
-    @test RegisterDeformation.arraysize(knots) == (15,11)
-
-    knotsall = (knots[1].*ones(length(knots[2]))', ones(length(knots[1])).*knots[2]')
-    for (i, knt) in enumerate(RegisterDeformation.eachknot(knots))
-        @test knt[1] == knotsall[1][i]
-        @test knt[2] == knotsall[2][i]
-    end
-
     randrange(xmin, xmax) = (xmax-xmin)*rand() + xmin
 
     ## Deformations
-    for knts in ((range(1, stop=15, length=5),),
+    for nodes in ((range(1, stop=15, length=5),),
                   (range(1, stop=15, length=5), range(1, stop=8, length=4)),
                   (range(1, stop=15, length=3), range(1, stop=8, length=4), range(1, stop=7, length=2)),
                   (range(1, stop=15, length=5), range(1, stop=8, length=4), range(1, stop=7, length=6)))
-        sz = map(length, knts)
-        rng = map(z->convert(Int, maximum(z)), knts)
+        sz = map(length, nodes)
+        rng = map(z->convert(Int, maximum(z)), nodes)
         # Zero deformation
-        u = zeros(length(knts), sz...)
-        ϕ = interpolate(RegisterDeformation.GridDeformation(u, knts))
+        u = zeros(length(nodes), sz...)
+        ϕ = interpolate(GridDeformation(u, nodes))
         for i = 1:10
             x = map(z->rand(1:z), rng)
             @test ϕ[x...] ≈ [x...]
@@ -38,9 +40,9 @@ using RegisterDeformation, RegisterUtilities
             end
         end
         # Constant shift
-        dx = randn(length(knts))
-        u = zeros(length(knts), sz...).+dx
-        ϕ = interpolate(RegisterDeformation.GridDeformation(u, knts))
+        dx = randn(length(nodes))
+        u = zeros(length(nodes), sz...).+dx
+        ϕ = interpolate(GridDeformation(u, nodes))
         for i = 1:10
             x = map(z->rand(1:z), rng)
             @test ϕ[x...] ≈ [x...]+dx
@@ -51,7 +53,7 @@ using RegisterDeformation, RegisterUtilities
         end
         # "Biquadratic"
         if all(x->x>2, sz)
-            N = length(knts)
+            N = length(nodes)
             u_is = Vector{Any}(undef, N)
             fs = Vector{Any}(undef, N)
             R = CartesianIndices(sz)
@@ -60,109 +62,125 @@ using RegisterDeformation, RegisterUtilities
                     f = x -> dot(q, (x-cntr).^2)
                     ui = zeros(sz)
                     for I in R
-                        ui[I] = f(Float64[knts[d][I[d]] for d = 1:N])
+                        ui[I] = f(Float64[nodes[d][I[d]] for d = 1:N])
                     end
                     u_is[i] = reshape(ui, 1, sz...)
                     fs[i] = f
                 end
             end
             u = cat(u_is..., dims = 1)
-            ϕ = interpolate!(RegisterDeformation.GridDeformation(copy(u), knts), InPlaceQ(OnCell()))
+            ϕ = interpolate!(GridDeformation(copy(u), nodes), InPlaceQ(OnCell()))
             for i = 1:10
-                y = Float64[randrange((knot[2]+knot[1])/2, (knot[end]+knot[end-1])/2) for knot in knts]
+                y = Float64[randrange((node[2]+node[1])/2, (node[end]+node[end-1])/2) for node in nodes]
                 dx = Float64[fs[d](y) for d=1:N]
                 try
                     @test ϕ[y...] ≈ y + Float64[fs[d](y) for d=1:N]
                 catch err
-                    @show y knts
-                    @show [((knot[2]+knot[1])/2, (knot[end]+knot[end-1])/2) for knot in knts]
+                    @show y nodes
+                    @show [((node[2]+node[1])/2, (node[end]+node[end-1])/2) for node in nodes]
                     @show Float64[fs[d](y) for d=1:N]
                     rethrow(err)
                 end
             end
         end
     end
+end
 
-
+@testset "tform2deformation" begin
     s = [3.3,-2.6]
     gsize = (3,2)
-    A = RegisterDeformation.tformtranslate(s)
-    ϕ = RegisterDeformation.tform2deformation(A, (500,480), gsize)
+    A = tformtranslate(s)
+    ϕ = tform2deformation(A, (500,480), gsize)
     u = reshape(reinterpret(Float64, ϕ.u), tuple(2,gsize...))
     @test all(u[1,:,:] .== s[1])
     @test all(u[2,:,:] .== s[2])
+end
 
-    ## WarpedArray
+@testset "warp" begin
+    # Ensure there is no conflict between ImageTransformations and RegisterDeformation
+    tform = tformrotate(pi/4)
+    ramp = 0.0:0.01:1
+    for img in (ramp*ramp', centered(ramp*ramp'))
+        imgw1 = warp(img, tform, axes(img))
+        ϕ = tform2deformation(tform, axes(img), (7, 7))
+        imgw2 = warp(img, ϕ)
+        @test all(x->isnan(x) || abs(x) < 0.02, imgw1 - imgw2)
+    end
+end
+
+@testset "WarpedArray" begin
+    znan(x) = isnan(x) ? zero(x) : x
 
     p = (1:100).-5
 
     dest = Vector{Float32}(undef, 10)
 
     # Simple translations in 1d
-    ϕ = RegisterDeformation.GridDeformation([0.0,0.0]', size(p))
-    q = RegisterDeformation.WarpedArray(p, ϕ);
-    RegisterDeformation.getindex!(dest, q, 1:10)
+    ϕ = GridDeformation([0.0,0.0]', size(p))
+    q = WarpedArray(p, ϕ);
+    getindex!(dest, q, 1:10)
     @assert maximum(abs.(dest - p[1:10])) < 10*eps(maximum(abs.(dest)))
 
-    ϕ = RegisterDeformation.GridDeformation([1.0,1.0]', size(p))
-    q = RegisterDeformation.WarpedArray(p, ϕ);
-    RegisterDeformation.getindex!(dest, q, 1:10)
+    ϕ = GridDeformation([1.0,1.0]', size(p))
+    q = WarpedArray(p, ϕ);
+    getindex!(dest, q, 1:10)
     @assert maximum(abs.(dest - p[2:11])) < 10*eps(maximum(abs.(dest)))
 
-    ϕ = RegisterDeformation.GridDeformation([-2.0,-2.0]', size(p))
-    q = RegisterDeformation.WarpedArray(p, ϕ);
-    RegisterDeformation.getindex!(dest, q, 1:10)
+    ϕ = GridDeformation([-2.0,-2.0]', size(p))
+    q = WarpedArray(p, ϕ);
+    getindex!(dest, q, 1:10)
     @assert maximum(abs.(dest[3:end] - p[1:8])) < 10*eps(maximum(abs.(dest[3:end])))
 
-    RegisterDeformation.getindex!(dest, q, 3:12)
+    getindex!(dest, q, 3:12)
     @assert maximum(abs.(dest - p[1:10])) < 10*eps(maximum(abs.(dest)))
 
-    ϕ = RegisterDeformation.GridDeformation([2.0,2.0]', size(p))
-    q = RegisterDeformation.WarpedArray(p, ϕ);
-    RegisterDeformation.getindex!(dest, q, 1:10)
+    ϕ = GridDeformation([2.0,2.0]', size(p))
+    q = WarpedArray(p, ϕ);
+    getindex!(dest, q, 1:10)
     @assert maximum(abs.(dest - p[3:12])) < 10*eps(maximum(abs.(dest)))
 
-    ϕ = RegisterDeformation.GridDeformation([5.0,5.0]', size(p))
-    q = RegisterDeformation.WarpedArray(p, ϕ);
-    RegisterDeformation.getindex!(dest, q, 1:10)
+    ϕ = GridDeformation([5.0,5.0]', size(p))
+    q = WarpedArray(p, ϕ);
+    getindex!(dest, q, 1:10)
     @assert maximum(abs.(dest - p[6:15])) < 10*eps(maximum(abs.(dest)))
 
     # SubArray (test whether we can go beyond edges)
     psub = view(collect(p), 3:20)
-    ϕ = RegisterDeformation.GridDeformation([0.0,0.0]', size(p))
-    q = RegisterDeformation.WarpedArray(psub, ϕ);
-    RegisterDeformation.getindex!(dest, q, -1:8)
+    ϕ = GridDeformation([0.0,0.0]', size(p))
+    q = WarpedArray(psub, ϕ);
+    getindex!(dest, q, -1:8)
     @assert maximum(abs.(dest[3:end] - p[3:10])) < 10*eps(maximum(abs.(dest[3:end])))
     any(isnan, dest) && @warn("Some dest are NaN, not yet sure whether this is a problem")
 
     # Stretches
     u = [0.0,5.0,10.0]
-    ϕ = interpolate(RegisterDeformation.GridDeformation(u', size(p)), Line(OnCell()))
-    q = RegisterDeformation.WarpedArray(p, ϕ)
-    RegisterDeformation.getindex!(dest, q, 1:10)
+    ϕ = interpolate(GridDeformation(u', size(p)), Line(OnCell()))
+    q = WarpedArray(p, ϕ)
+    getindex!(dest, q, 1:10)
     @assert abs(dest[1] - p[1]) < sqrt(eps(1.0f0))
-    RegisterDeformation.getindex!(dest, q, 86:95)
+    getindex!(dest, q, 86:95)
     @assert isnan.(dest) == [falses(5);trues(5)]  # fixme
-    dest2 = RegisterDeformation.getindex!(zeros(Float32, 100), q, 1:100)
+    dest2 = getindex!(zeros(Float32, 100), q, 1:100)
     @assert all(abs.(diff(dest2)[26:74] .- ((u[3]-u[1])/99+1)) .< sqrt(eps(1.0f0)))
 
     #2d
     p = reshape(1:120, 10, 12)
     u1 = [2.0 2.0; 2.0 2.0]
     u2 = [-1.0 -1.0; -1.0 -1.0]
-    ϕ = RegisterDeformation.GridDeformation((u1,u2), size(p))
-    q = RegisterDeformation.WarpedArray(p, ϕ)
+    ϕ = GridDeformation((u1,u2), size(p))
+    q = WarpedArray(p, ϕ)
     dest = zeros(size(p))
     rng = (1:size(p,1),1:size(p,2))
-    RegisterDeformation.getindex!(dest, q, rng...)
+    getindex!(dest, q, rng...)
     @assert maximum(abs.(znan.(dest[1:7,2:end] - p[3:9,1:end-1]))) < 10*eps(maximum(znan.(dest)))
+end
 
-    # Composition
+@testset "Composition" begin
     # Test that two rotations approximately compose to another rotation
     gridsize = (49,47)
     imgsize = (200,200)
-    ϕ1 = RegisterDeformation.tform2deformation(RegisterDeformation.tformrotate( pi/180), imgsize, gridsize)
-    ϕ2 = RegisterDeformation.tform2deformation(RegisterDeformation.tformrotate(2pi/180), imgsize, gridsize)
+    ϕ1 = tform2deformation(tformrotate( pi/180), imgsize, gridsize)
+    ϕ2 = tform2deformation(tformrotate(2pi/180), imgsize, gridsize)
     ϕi = interpolate(ϕ1)
     ϕc = ϕi(ϕi)
     uc = reshape(reinterpret(Float64, ϕc.u), (2, gridsize...))
@@ -188,7 +206,7 @@ using RegisterDeformation, RegisterUtilities
 
     # A composition function that ForwardDiff will be happy with
     function compose_u(ϕ1, u2, f, shp, imsz)
-        ϕ2 = f(RegisterDeformation.GridDeformation(reshape(u2, shp), imsz))
+        ϕ2 = f(GridDeformation(reshape(u2, shp), imsz))
         ϕ = ϕ1(ϕ2)
         ret = Vector{eltype(eltype(ϕ.u))}(undef, prod(shp))
         i = 0
@@ -204,51 +222,54 @@ using RegisterDeformation, RegisterUtilities
     u1 = randn(2, gridsize...)
     u2 = randn(2, gridsize...)
     imsz = (100,101)
-    ϕ1 = interpolate(RegisterDeformation.GridDeformation(u1, imsz))
+    ϕ1 = interpolate(GridDeformation(u1, imsz))
     for f in (interpolate, identity)
-        ϕ2 = f(RegisterDeformation.GridDeformation(u2, imsz))
-        ϕ, g = RegisterDeformation.compose(ϕ1, ϕ2)
+        ϕ2 = f(GridDeformation(u2, imsz))
+        ϕ, g = compose(ϕ1, ϕ2)
         u2vec = vec(u2)
         gj = ForwardDiff.jacobian(u2vec -> compose_u(ϕ1, u2vec, f, size(u2), imsz), u2vec)
         compare_g(g, gj, gridsize)
     end
 
     # Test identity-composition
-    _, g = RegisterDeformation.compose(identity, ϕ2)
+    _, g = compose(identity, ϕ2)
     gj = zeros(2*prod(gridsize), 2*prod(gridsize))
     for i = 1:prod(gridsize)
         rng = 2*(i-1)+1:2i
         gj[rng,rng] = Matrix{Float64}(I,2,2)
     end
     compare_g(g, gj, gridsize)
+end
 
-    # warpgrid
-    knots = (range(1, stop=100, length=4), range(1, stop=100, length=3))
-    gridsize = map(length, knots)
-    ϕ = RegisterDeformation.GridDeformation(5*randn(2,gridsize...), knots)
-    kg = RegisterDeformation.knotgrid(knots)
+@testset "warpgrid" begin
+    nodes = (range(1, stop=100, length=4), range(1, stop=100, length=3))
+    gridsize = map(length, nodes)
+    ϕ = GridDeformation(5*randn(2,gridsize...), nodes)
+    kg = nodegrid(nodes)
     @test eltype(kg) == Bool
     @test size(kg) == (100, 100)
-    kg2 = RegisterDeformation.knotgrid(ϕ)
+    kg2 = nodegrid(ϕ)
     @test kg2 == kg
-    kg = RegisterDeformation.knotgrid(Float64, knots)
+    kg = nodegrid(Float64, nodes)
     @test eltype(kg) == Float64
-    A = RegisterDeformation.warpgrid(ϕ)
-    B = RegisterDeformation.warpgrid(ϕ, scale=1.5)
+    A = warpgrid(ϕ)
+    B = warpgrid(ϕ, scale=1.5)
     @test A != B
     @test isa(A, Matrix{Float32})
-    C = RegisterDeformation.warpgrid(ϕ, showidentity=true)
+    C = warpgrid(ϕ, showidentity=true)
     @test eltype(C) == RGB{Float32}
+end
 
+@testset "warp I/O" begin
     # Writing warped data to disk
     o = ones(Float32, 5, 5)
     A = o .* reshape(1:7, (1,1,7))
     img = AxisArray(A, :y, :x, :time)
     fn = tempname()
     # With Vector{GridDeformation}
-    ϕs = tighten([RegisterDeformation.GridDeformation(zeros(2,3,3), size(o)) for i = 1:nimages(img)])
+    ϕs = tighten([GridDeformation(zeros(2,3,3), size(o)) for i = 1:nimages(img)])
     open(fn, "w") do io
-        RegisterDeformation.warp!(Float32, io, img, ϕs)
+        warp!(Float32, io, img, ϕs)
     end
     warped = open(fn, "r") do io
         read!(io, Array{Float32}(undef, size(img)))
@@ -257,7 +278,7 @@ using RegisterDeformation, RegisterUtilities
     # With Array{SVector}
     uarray = reshape(reinterpret(SVector{2,Float64}, zeros(2,3,3,7)), (3,3,7))
     open(fn, "w") do io
-        RegisterDeformation.warp!(Float32, io, img, uarray)
+        warp!(Float32, io, img, uarray)
     end
     warped = open(fn, "r") do io
         read!(io, Array{Float32}(undef, size(img)))
@@ -267,7 +288,7 @@ using RegisterDeformation, RegisterUtilities
     uarray = zeros(2,3,3,7)
     fn = tempname()
     open(fn, "w") do io
-        RegisterDeformation.warp!(Float32, io, img, uarray)
+        warp!(Float32, io, img, uarray)
     end
     warped = open(fn, "r") do io
         read!(io, Array{Float32}(undef, size(img)))
@@ -275,22 +296,23 @@ using RegisterDeformation, RegisterUtilities
     @test warped == img
     # Multi-process
     open(fn, "w") do io
-        RegisterDeformation.warp!(Float32, io, img, uarray; nworkers=3)
+        warp!(Float32, io, img, uarray; nworkers=3)
     end
     warped = open(fn, "r") do io
         read!(io, Array{Float32}(undef, size(img)))
     end
     @test warped == img
+end
 
-    # Saving arrays-of-fixedsizearrays efficiently
-    using JLD2, HDF5
-    knots = (range(1, stop=20, length=3), range(1, stop=30, length=5))
-    ϕ = RegisterDeformation.GridDeformation(rand(2,map(length,knots)...), knots)
+@testset "Saving deformations" begin
+    # Saving arrays-of-staticarrays efficiently
+    nodes = (range(1, stop=20, length=3), range(1, stop=30, length=5))
+    ϕ = GridDeformation(rand(2,map(length,nodes)...), nodes)
     fn = string(tempname(), ".jld2")
     save(fn, "ϕ", ϕ)
     ϕ2 = load(fn, "ϕ")
     @test ϕ2.u == ϕ.u
-    @test ϕ2.knots == ϕ.knots
+    @test ϕ2.nodes == ϕ.nodes
     if HDF5.h5_get_libversion() >= v"1.10"
         str = read(`h5dump $fn`, String)
         @test something(findfirst("SIMPLE { ( 5, 3, 2 ) / ( 5, 3, 2 ) }", str), 0:-1) != 0:-1||
@@ -298,38 +320,42 @@ using RegisterDeformation, RegisterUtilities
             something(findfirst("SIMPLE { ( 2 ) / ( 2 ) }", str), 0:-1) != 0:-1
     end
     rm(fn)
+end
 
-    # temporal interpolation
+@testset "Temporal interpolation" begin
     u2 = [1.0 1.0]
     u4 = [3.0 3.0]
-    knots = (range(1, stop=20, length=2),)
-    ϕ2 = RegisterDeformation.GridDeformation(u2, knots)
-    ϕ4 = RegisterDeformation.GridDeformation(u4, knots)
+    nodes = (range(1, stop=20, length=2),)
+    ϕ2 = GridDeformation(u2, nodes)
+    ϕ4 = GridDeformation(u4, nodes)
     ϕsindex = [ϕ2, ϕ4]
-    ϕs = RegisterDeformation.tinterpolate(ϕsindex, [2,4], 5)
+    ϕs = tinterpolate(ϕsindex, [2,4], 5)
     @test length(ϕs) == 5
     @test eltype(ϕs) == eltype(ϕsindex)
     @test all(map(x-> x == @SVector([1.0]), ϕs[1].u))
     @test all(map(x-> x == @SVector([2.0]), ϕs[3].u))
+end
 
-    # median filtering
+@testset "Median filtering" begin
     u = rand(2, 3, 3, 9)
-    ϕs = RegisterDeformation.griddeformations(u, (range(1, stop=10, length=3), range(1, stop=11, length=3)))
-    ϕsfilt = RegisterDeformation.medfilt(ϕs, 3)
+    ϕs = griddeformations(u, (range(1, stop=10, length=3), range(1, stop=11, length=3)))
+    ϕsfilt = medfilt(ϕs, 3)
     v = ϕsfilt[3].u[2,2]
     v1 = median(vec(u[1,2,2,2:4]))
     v2 = median(vec(u[2,2,2,2:4]))
     @test v[1] == v1 && v[2] == v2
+end
 
+@testset "Regridding" begin
     z = [(x-2.5)^2 for x = 0:5]
     uold = zeros(2,6,6)
     uold[1,:,:] = z .* ones(6)'
     uold[2,:,:] = ones(6) .* z'
-    knots = (range(1, stop=20, length=6), range(1, stop=30, length=6))
-    ϕ = RegisterDeformation.GridDeformation(uold, knots)
-    ϕnew = RegisterDeformation.regrid(ϕ, (10,8))
-    @test ϕnew.knots[1] ≈ range(1, stop=20, length=10)
-    @test ϕnew.knots[2] ≈ range(1, stop=30, length=8)
+    nodes = (range(1, stop=20, length=6), range(1, stop=30, length=6))
+    ϕ = GridDeformation(uold, nodes)
+    ϕnew = regrid(ϕ, (10,8))
+    @test ϕnew.nodes[1] ≈ range(1, stop=20, length=10)
+    @test ϕnew.nodes[2] ≈ range(1, stop=30, length=8)
     ϕi = interpolate(ϕ)
     for (iy,y) in enumerate(range(1, stop=30, length=8))
         ys = (y-1)*5/29
@@ -339,19 +365,15 @@ using RegisterDeformation, RegisterUtilities
             @test ϕnew.u[ix,iy] ≈ ϕi.u(x,y)
         end
     end
+end
 
+@testset "Equality" begin
     # https://github.com/HolyLab/BlockRegistrationScheduler/pull/42#discussion_r139291426
-    knots = (range(0, stop=1, length=3), range(0, stop=1, length=5))
+    nodes = (range(0, stop=1, length=3), range(0, stop=1, length=5))
     u = rand(2, 3, 5)
-    ϕ1 = RegisterDeformation.GridDeformation(u, knots)
-    ϕ2 = RegisterDeformation.GridDeformation(u, knots)
+    ϕ1 = GridDeformation(u, nodes)
+    ϕ2 = GridDeformation(u, nodes)
     @test ϕ1 == ϕ2
-
-    # Ensure there is no conflict between Images and RegisterDeformation
-    tform = tformrotate(pi/4)
-    ϕ = tform2deformation(tform, (100, 100), (7, 7))
-    img = rand(100, 100)
-    warp(img, ϕ)
 end
 
 @testset "Transformation of arrays" begin
@@ -438,5 +460,3 @@ end
     At = transform(A, a)
     @test At[:,1:2] == A[:,2:3]
 end
-
-nothing
