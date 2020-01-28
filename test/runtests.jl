@@ -33,10 +33,10 @@ end
         ϕ = interpolate(GridDeformation(u, nodes))
         for i = 1:10
             x = map(z->rand(1:z), rng)
-            @test ϕ[x...] ≈ [x...]
+            @test @inferred(ϕ(x...)) ≈ [x...]
             if all(x->x>2, sz)
                 y = map(z->rand(2:z-1)+rand()-0.5, rng)
-                @test ϕ[y...] ≈ [y...]
+                @test ϕ(y...) ≈ [y...]
             end
         end
         # Constant shift
@@ -45,10 +45,10 @@ end
         ϕ = interpolate(GridDeformation(u, nodes))
         for i = 1:10
             x = map(z->rand(1:z), rng)
-            @test ϕ[x...] ≈ [x...]+dx
+            @test ϕ(x...) ≈ [x...]+dx
             if all(x->x>2, sz)
                 y = map(z->rand(2:z-1)+rand()-0.5, rng)
-                @test ϕ[y...] ≈ [y...]+dx
+                @test ϕ(y...) ≈ [y...]+dx
             end
         end
         # "Biquadratic"
@@ -74,7 +74,7 @@ end
                 y = Float64[randrange((node[2]+node[1])/2, (node[end]+node[end-1])/2) for node in nodes]
                 dx = Float64[fs[d](y) for d=1:N]
                 try
-                    @test ϕ[y...] ≈ y + Float64[fs[d](y) for d=1:N]
+                    @test ϕ(y...) ≈ y + Float64[fs[d](y) for d=1:N]
                 catch err
                     @show y nodes
                     @show [((node[2]+node[1])/2, (node[end]+node[end-1])/2) for node in nodes]
@@ -90,7 +90,7 @@ end
     s = [3.3,-2.6]
     gsize = (3,2)
     A = tformtranslate(s)
-    ϕ = tform2deformation(A, (500,480), gsize)
+    ϕ = tform2deformation(A, map(Base.OneTo, (500,480)), gsize)
     u = reshape(reinterpret(Float64, ϕ.u), tuple(2,gsize...))
     @test all(u[1,:,:] .== s[1])
     @test all(u[2,:,:] .== s[2])
@@ -116,71 +116,71 @@ end
     dest = Vector{Float32}(undef, 10)
 
     # Simple translations in 1d
-    ϕ = GridDeformation([0.0,0.0]', size(p))
+    ϕ = GridDeformation([0.0,0.0]', axes(p))
     q = WarpedArray(p, ϕ);
     getindex!(dest, q, 1:10)
-    @assert maximum(abs.(dest - p[1:10])) < 10*eps(maximum(abs.(dest)))
+    @test maximum(abs.(dest - p[1:10])) < 10*eps(maximum(abs.(dest)))
 
-    ϕ = GridDeformation([1.0,1.0]', size(p))
+    ϕ = GridDeformation([1.0,1.0]', axes(p))
     q = WarpedArray(p, ϕ);
     getindex!(dest, q, 1:10)
-    @assert maximum(abs.(dest - p[2:11])) < 10*eps(maximum(abs.(dest)))
+    @test maximum(abs.(dest - p[2:11])) < 10*eps(maximum(abs.(dest)))
 
-    ϕ = GridDeformation([-2.0,-2.0]', size(p))
+    ϕ = GridDeformation([-2.0,-2.0]', axes(p))
     q = WarpedArray(p, ϕ);
     getindex!(dest, q, 1:10)
-    @assert maximum(abs.(dest[3:end] - p[1:8])) < 10*eps(maximum(abs.(dest[3:end])))
+    @test maximum(abs.(dest[3:end] - p[1:8])) < 10*eps(maximum(abs.(dest[3:end])))
 
     getindex!(dest, q, 3:12)
-    @assert maximum(abs.(dest - p[1:10])) < 10*eps(maximum(abs.(dest)))
+    @test maximum(abs.(dest - p[1:10])) < 10*eps(maximum(abs.(dest)))
 
-    ϕ = GridDeformation([2.0,2.0]', size(p))
+    ϕ = GridDeformation([2.0,2.0]', axes(p))
     q = WarpedArray(p, ϕ);
     getindex!(dest, q, 1:10)
-    @assert maximum(abs.(dest - p[3:12])) < 10*eps(maximum(abs.(dest)))
+    @test maximum(abs.(dest - p[3:12])) < 10*eps(maximum(abs.(dest)))
 
-    ϕ = GridDeformation([5.0,5.0]', size(p))
+    ϕ = GridDeformation([5.0,5.0]', axes(p))
     q = WarpedArray(p, ϕ);
     getindex!(dest, q, 1:10)
-    @assert maximum(abs.(dest - p[6:15])) < 10*eps(maximum(abs.(dest)))
+    @test maximum(abs.(dest - p[6:15])) < 10*eps(maximum(abs.(dest)))
 
     # SubArray (test whether we can go beyond edges)
     psub = view(collect(p), 3:20)
-    ϕ = GridDeformation([0.0,0.0]', size(p))
+    ϕ = GridDeformation([0.0,0.0]', axes(p))
     q = WarpedArray(psub, ϕ);
     getindex!(dest, q, -1:8)
-    @assert maximum(abs.(dest[3:end] - p[3:10])) < 10*eps(maximum(abs.(dest[3:end])))
+    @test maximum(abs.(dest[3:end] - p[3:10])) < 10*eps(maximum(abs.(dest[3:end])))
     any(isnan, dest) && @warn("Some dest are NaN, not yet sure whether this is a problem")
 
     # Stretches
     u = [0.0,5.0,10.0]
-    ϕ = interpolate(GridDeformation(u', size(p)), Line(OnCell()))
+    ϕ = interpolate(GridDeformation(u', axes(p)), Line(OnCell()))
     q = WarpedArray(p, ϕ)
     getindex!(dest, q, 1:10)
-    @assert abs(dest[1] - p[1]) < sqrt(eps(1.0f0))
+    @test abs(dest[1] - p[1]) < sqrt(eps(1.0f0))
     getindex!(dest, q, 86:95)
-    @assert isnan.(dest) == [falses(5);trues(5)]  # fixme
+    @test isnan.(dest) == [falses(5);trues(5)]  # fixme
     dest2 = getindex!(zeros(Float32, 100), q, 1:100)
-    @assert all(abs.(diff(dest2)[26:74] .- ((u[3]-u[1])/99+1)) .< sqrt(eps(1.0f0)))
+    @test all(abs.(diff(dest2)[26:74] .- ((u[3]-u[1])/99+1)) .< sqrt(eps(1.0f0)))
 
     #2d
     p = reshape(1:120, 10, 12)
     u1 = [2.0 2.0; 2.0 2.0]
     u2 = [-1.0 -1.0; -1.0 -1.0]
-    ϕ = GridDeformation((u1,u2), size(p))
+    ϕ = GridDeformation((u1,u2), axes(p))
     q = WarpedArray(p, ϕ)
-    dest = zeros(size(p))
+    dest = zeros(axes(p))
     rng = (1:size(p,1),1:size(p,2))
     getindex!(dest, q, rng...)
-    @assert maximum(abs.(znan.(dest[1:7,2:end] - p[3:9,1:end-1]))) < 10*eps(maximum(znan.(dest)))
+    @test maximum(abs.(znan.(dest[1:7,2:end] - p[3:9,1:end-1]))) < 10*eps(maximum(znan.(dest)))
 end
 
 @testset "Composition" begin
     # Test that two rotations approximately compose to another rotation
     gridsize = (49,47)
-    imgsize = (200,200)
-    ϕ1 = tform2deformation(tformrotate( pi/180), imgsize, gridsize)
-    ϕ2 = tform2deformation(tformrotate(2pi/180), imgsize, gridsize)
+    imgaxs = centeraxes(map(Base.OneTo, (200,200)))
+    ϕ1 = tform2deformation(tformrotate( pi/180), imgaxs, gridsize)
+    ϕ2 = tform2deformation(tformrotate(2pi/180), imgaxs, gridsize)
     ϕi = interpolate(ϕ1)
     ϕc = ϕi(ϕi)
     uc = reshape(reinterpret(Float64, ϕc.u), (2, gridsize...))
@@ -205,8 +205,8 @@ end
     end
 
     # A composition function that ForwardDiff will be happy with
-    function compose_u(ϕ1, u2, f, shp, imsz)
-        ϕ2 = f(GridDeformation(reshape(u2, shp), imsz))
+    function compose_u(ϕ1, u2, f, shp, imaxs)
+        ϕ2 = f(GridDeformation(reshape(u2, shp), imaxs))
         ϕ = ϕ1(ϕ2)
         ret = Vector{eltype(eltype(ϕ.u))}(undef, prod(shp))
         i = 0
@@ -221,13 +221,13 @@ end
     gridsize = (11,11)
     u1 = randn(2, gridsize...)
     u2 = randn(2, gridsize...)
-    imsz = (100,101)
-    ϕ1 = interpolate(GridDeformation(u1, imsz))
+    imaxs = map(Base.OneTo, (100,101))
+    ϕ1 = interpolate(GridDeformation(u1, imaxs))
     for f in (interpolate, identity)
-        ϕ2 = f(GridDeformation(u2, imsz))
+        ϕ2 = f(GridDeformation(u2, imaxs))
         ϕ, g = compose(ϕ1, ϕ2)
         u2vec = vec(u2)
-        gj = ForwardDiff.jacobian(u2vec -> compose_u(ϕ1, u2vec, f, size(u2), imsz), u2vec)
+        gj = ForwardDiff.jacobian(u2vec -> compose_u(ϕ1, u2vec, f, size(u2), imaxs), u2vec)
         compare_g(g, gj, gridsize)
     end
 
@@ -267,7 +267,7 @@ end
     img = AxisArray(A, :y, :x, :time)
     fn = tempname()
     # With Vector{GridDeformation}
-    ϕs = tighten([GridDeformation(zeros(2,3,3), size(o)) for i = 1:nimages(img)])
+    ϕs = tighten([GridDeformation(zeros(2,3,3), axes(o)) for i = 1:nimages(img)])
     open(fn, "w") do io
         warp!(Float32, io, img, ϕs)
     end

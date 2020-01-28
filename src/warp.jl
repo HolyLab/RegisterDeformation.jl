@@ -64,9 +64,10 @@ nimages(img)`.
 """
 function warp!(::Type{T}, dest::Union{IO,HDF5Dataset,JLD2.JLDFile}, img, ϕs; nworkers=1) where T
     n = nimages(img)
-    ssz = map(d->size(img,d),coords_spatial(img))
+    saxs = indices_spatial(img)
+    ssz = map(length, saxs)
     if n == 1
-        ϕ = extract1(ϕs, sdims(img), ssz)
+        ϕ = extract1(ϕs, sdims(img), saxs)
         destarray = Array{T}(undef, ssz)
         warp!(destarray, img, ϕ)
         warp_write(dest, destarray)
@@ -78,7 +79,7 @@ function warp!(::Type{T}, dest::Union{IO,HDF5Dataset,JLD2.JLDFile}, img, ϕs; nw
     end
     destarray = Array{T}(undef, ssz)
     @showprogress 1 "Stacks:" for i = 1:n
-        ϕ = extracti(ϕs, i, ssz)
+        ϕ = extracti(ϕs, i, saxs)
         warp!(destarray, view(img, timeaxis(img)(i)), ϕ)
         warp_write(dest, destarray, i)
     end
@@ -92,7 +93,8 @@ warp!(dest::Union{HDF5Dataset,JLD2.JLDFile}, img, u; nworkers=1) =
 
 function _warp!(::Type{T}, dest, img, ϕs, nworkers) where T
     n = nimages(img)
-    ssz = map(d->size(img,d),coords_spatial(img))
+    saxs = indices_spatial(img)
+    ssz = map(length, saxs)
     wpids = addprocs(nworkers)
     simg = Vector{Any}()
     swarped = Vector{Any}()
@@ -118,7 +120,7 @@ function _warp!(::Type{T}, dest, img, ϕs, nworkers) where T
             warped = swarped[i]
             @async begin
                 while (idx = getnextidx()) <= n
-                    ϕ = extracti(ϕs, idx, ssz)
+                    ϕ = extracti(ϕs, idx, saxs)
                     copyto!(src, view(img, timeaxis(img)(idx)))
                     remotecall_fetch(warp!, p, warped, src, ϕ)
                     put!(writing_mutex, true)
