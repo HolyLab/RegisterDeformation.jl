@@ -3,8 +3,9 @@ language: julia
 os:
   - linux
 julia:
-  - 0.7
   - 1.0
+  - 1
+  - nightly
 notifications:
   email: false
 addons:
@@ -17,11 +18,15 @@ script:
               user_regs = joinpath(DEPOT_PATH[1],"registries");
               mkpath(user_regs);
               all_registries = Dict("General" => "https://github.com/JuliaRegistries/General.git",
-                            "HolyLabRegistry" => "git@github.com:HolyLab/HolyLabRegistry.git");
+                            "HolyLabRegistry" => "https://github.com/HolyLab/HolyLabRegistry.git");
               Base.shred!(LibGit2.CachedCredentials()) do creds
                 for (reg, url) in all_registries
                   path = joinpath(user_regs, reg);
-                  LibGit2.with(Pkg.GitTools.clone(url, path; header = "registry $reg from $(repr(url))", credentials = creds)) do repo end
+                  if VERSION < v"1.4"
+                    LibGit2.with(Pkg.GitTools.clone(url, path; header = "registry $reg from $(repr(url))", credentials = creds)) do repo end
+                  else
+                    LibGit2.with(Pkg.GitTools.clone(Pkg.Types.Context(), url, path; header = "registry $reg from $(repr(url))", credentials = creds)) do repo end
+                  end
                 end
               end'
   - julia -e 'using Pkg; Pkg.build(); Pkg.test("RegisterDeformation"; coverage=false)'
