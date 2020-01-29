@@ -5,15 +5,14 @@ version = "0.3.0"
 
 [deps]
 AxisArrays = "39de3d68-74b9-583c-8d2d-e117c070f3a9"
-ColorTypes = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
 CoordinateTransformations = "150eb455-5306-5404-9cee-2592286d6298"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
+ImageAxes = "2803e5a7-5153-5ecf-9a86-9b4c37f5f5ac"
 ImageCore = "a09fc81d-aa75-5fe9-8630-4744c3626534"
 ImageTransformations = "02fcd773-0e25-5acc-982a-7f6622650795"
-Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -29,14 +28,13 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
 AxisArrays = "0.3"
-ColorTypes = "0.8, 0.9"
 CoordinateTransformations = "0.5"
 FileIO = "1"
 ForwardDiff = "0.10"
 HDF5 = "0.10, 0.11, 0.12"
-ImageCore = "0.8"
+ImageAxes = "0.5, 0.6"
+ImageCore = "0.8.1"
 ImageTransformations = "0.8"
-Images = "0.18, 0.19, 0.20"
 Interpolations = "0.12.8"
 JLD2 = "0.1"
 OffsetArrays = "0.10, 0.11, 1"
@@ -49,7 +47,8 @@ julia = "1"
 
 [extras]
 DualNumbers = "fa6b7ba4-c1ee-5f82-b5fc-ecf0adba8f74"
+ImageFiltering = "6a3955dd-da59-5b1f-98d4-e7296123deb5"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "DualNumbers"]
+test = ["Test", "DualNumbers", "ImageFiltering"]

@@ -1,6 +1,6 @@
 module RegisterDeformation
 
-using Images, Interpolations, ColorTypes, StaticArrays, HDF5, JLD2, ProgressMeter
+using ImageCore, ImageAxes, Interpolations, StaticArrays, HDF5, JLD2, ProgressMeter
 using RegisterUtilities, LinearAlgebra, Rotations, Base.Cartesian
 using Distributed, Statistics, SharedArrays
 using Base: tail
@@ -21,6 +21,7 @@ export
     centeraxes,
     compose,
     eachnode,
+    getindex!,
     griddeformations,
     medfilt,
     nodegrid,

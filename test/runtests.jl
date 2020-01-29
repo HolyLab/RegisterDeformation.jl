@@ -1,11 +1,13 @@
 #import BlockRegistration
 using RegisterDeformation
-using CoordinateTransformations, Interpolations, ColorTypes, ForwardDiff
-using StaticArrays, Images, LinearAlgebra, Distributed, Statistics
+using CoordinateTransformations, Interpolations, ImageCore, ForwardDiff
+using StaticArrays, LinearAlgebra, Distributed, Statistics
 using AxisArrays: AxisArray
+using OffsetArrays
 using Test
 using RegisterDeformation, RegisterUtilities
-using JLD2, HDF5
+using JLD2, HDF5, FileIO
+using ImageFiltering
 
 @testset "Nodes" begin
     nodes = (range(1, stop=15, length=5), range(1, stop=11, length=3))
@@ -100,7 +102,8 @@ end
     # Ensure there is no conflict between ImageTransformations and RegisterDeformation
     tform = tformrotate(pi/4)
     ramp = 0.0:0.01:1
-    for img in (ramp*ramp', centered(ramp*ramp'))
+    nhalf = length(ramp) ÷ 2
+    for img in (ramp*ramp', OffsetArray(ramp*ramp', -nhalf:nhalf, -nhalf:nhalf))
         imgw1 = warp(img, tform, axes(img))
         ϕ = tform2deformation(tform, axes(img), (7, 7))
         imgw2 = warp(img, ϕ)
@@ -378,7 +381,7 @@ end
 
 @testset "Transformation of arrays" begin
     using RegisterDeformation: center
-
+    # TODO: get rid of dependency on ImageFiltering for faster CI times
     padwith0(A) = parent(padarray(A, Fill(0, (2,2))))
 
     for IT in ((BSpline(Constant())),
