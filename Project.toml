@@ -1,7 +1,7 @@
 name = "RegisterDeformation"
 uuid = "c19381b7-cf49-59d7-881c-50dfbd227eaf"
 authors = ["Tim Holy <tim.holy@gmail.com>"]
-version = "0.3.0"
+version = "0.3.1"
 
 [deps]
 AxisArrays = "39de3d68-74b9-583c-8d2d-e117c070f3a9"
