@@ -17,24 +17,25 @@ export
     GridDeformation,
     WarpedArray,
     # functions
-    arraysize,
+    arraysize,       # TODO: don't export?
     centeraxes,
     compose,
     eachnode,
     getindex!,
     griddeformations,
+    interpolate,
     medfilt,
     nodegrid,
     regrid,
     tform2deformation,
     tinterpolate,
     translate,
-    vecindex,
-    vecgradient!,
+    vecindex,        # TODO: don't export?
+    vecgradient!,    # TODO: don't export?
     warp,
     warp!,
     warpgrid,
-    # old AffineTransfroms.jl code
+    # old AffineTransfroms.jl code (TODO?: remove)
     tformtranslate,
     tformrotate,
     tformeye,

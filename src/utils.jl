@@ -1,3 +1,10 @@
+"""
+    caxs = centeraxes(axs)
+
+Return a set of axes centered on zero. Specifically, if `axs[i]` is a range,
+then `caxs[i]` is a UnitRange of the same length that is approximately symmetric
+around 0.
+"""
 centeraxes(axs) = map(centeraxis, axs)
 
 function centeraxis(ax)
@@ -34,7 +41,11 @@ checkϕdims(ϕs::Vector{D}, N, n) where {D<:AbstractDeformation} = length(ϕs) =
 
 
 # TODO?: do we need to return real values beyond-the-edge for a SubArray?
-to_etp(img) = extrapolate(interpolate(img, BSpline(Linear())), convert(promote_type(eltype(img), Float32), NaN))
+nanvalue(::Type{T}) where T<:Real = convert(promote_type(T, Float32), NaN)
+nanvalue(::Type{C}) where C<:AbstractGray = Gray(nanvalue(eltype(C)))
+nanvalue(::Type{C}) where C<:AbstractRGB  = (x = nanvalue(eltype(C)); RGB(x, x, x))
+
+to_etp(img) = extrapolate(interpolate(img, BSpline(Linear())), nanvalue(eltype(img)))
 
 to_etp(itp::AbstractInterpolation) = extrapolate(itp, convert(promote_type(eltype(itp), Float32), NaN))
 
