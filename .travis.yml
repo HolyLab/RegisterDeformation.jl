@@ -30,7 +30,15 @@ script:
                 end
               end'
   - julia -e 'using Pkg; Pkg.build(); Pkg.test("RegisterDeformation"; coverage=false)'
-after_success:
-# update the documentation
-  - julia -e 'using Pkg; Pkg.add("Documenter")'
-  - julia -e 'using RegisterDeformation; cd(dirname(dirname(pathof(RegisterDeformation)))); ENV["DOCUMENTER_DEBUG"] = "true"; include(joinpath("docs", "make.jl"))'
+
+jobs:
+  include:
+    - stage: "Documentation"
+      julia: 1
+      os: linux
+      script:
+        - julia --project=docs/ -e 'using Pkg; pkg"registry add General https://github.com/HolyLab/HolyLabRegistry.git";
+                                               Pkg.develop(PackageSpec(path=pwd()));
+                                               Pkg.instantiate()'
+        - julia --project=docs/ docs/make.jl
+      after_success: skip

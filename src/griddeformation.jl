@@ -18,6 +18,18 @@ to the displacement along each axis (and therefore `size(u,1) == N`).
 Finally, `ϕ = GridDeformation((u1, u2, ...), ...)` allows you to
 construct the deformation using an `N`-tuple of shift-arrays, each
 with `N` dimensions.
+
+# Example
+
+To represent a two-dimensional deformation over a spatial region `1:100 × 1:200`
+(e.g., for an image of that size),
+
+```julia
+gridsize = (3, 5)             # a coarse grid
+u = 10*randn(2, gridsize...)  # each displacement is 2-dimensional, typically ~10 pixels
+nodes = (range(1, stop=100, length=gridsize[1]), range(1, stop=200, length=gridsize[2]))
+ϕ = GridDeformation(u, nodes) # this is a "naive" deformation (not ready for interpolation)
+```
 """
 struct GridDeformation{T,N,A<:AbstractArray,L} <: AbstractDeformation{T,N}
     u::A
@@ -81,6 +93,17 @@ function GridDeformation(u::ScaledInterpolation{FV}) where FV<:SVector
     N = length(FV)
     ndims(u) == N || throw(DimensionMismatch("Dimension $(ndims(u)) incompatible with vectors of length $N"))
     GridDeformation{eltype(FV),N,typeof(u),typeof(u.ranges[1])}(u)
+end
+
+function Base.show(io::IO, ϕ::GridDeformation{T}) where T
+    if ϕ.u isa AbstractInterpolation
+        print(io, "Interpolating ")
+    end
+    print(io, Base.dims2string(size(ϕ.u)), " GridDeformation{", T, "} over a domain ")
+    for (i, n) in enumerate(ϕ.nodes)
+        print(io, first(n), "..", last(n))
+        i < length(ϕ.nodes) && print(io, '×')
+    end
 end
 
 """
@@ -148,6 +171,12 @@ end
     return ϕ.u(xs...) .+ xs
 end
 
+function (ϕ::GridDeformation{T,N})(xs::Vararg{Number,N}) where {T,N}
+    error("call `ϕi = interpolate(ϕ)` and use `ϕi` for evaluating the deformation.")
+end
+
+@inline (ϕ::GridDeformation{T,N})(xs::SVector{N}) where {T,N} = ϕ(Tuple(xs)...)
+
 # Composition ϕ_old(ϕ_new(x))
 function (ϕ_old::GridDeformation{T1,N,A})(ϕ_new::GridDeformation{T2,N}) where {T1,T2,N,A<:AbstractInterpolation}
     uold, nodes = ϕ_old.u, ϕ_old.nodes
@@ -196,6 +225,12 @@ struct NodeIterator{K,N}
     iter::CartesianIndices{N}
 end
 
+"""
+    iter = eachnode(ϕ)
+
+Create an iterator for visiting all the nodes of `ϕ`.
+"""
+eachnode(ϕ::GridDeformation) = eachnode(ϕ.nodes)
 eachnode(nodes) = NodeIterator(nodes, CartesianIndices(map(length, nodes)))
 
 function Base.iterate(ki::NodeIterator)
@@ -269,8 +304,8 @@ function compose(ϕ_old::GridDeformation{T1,N,A}, ϕ_new::GridDeformation{T2,N})
 end
 
 """
-`ϕsi_old` and `ϕs_new` will generated `ϕs_c` vector and `g` vector
-`ϕsi_old` is interpolated ϕs_old:
+`ϕsi_old` and `ϕs_new` will generate `ϕs_c` vector and `g` vector
+`ϕsi_old` is interpolated ``ϕs_old`:
 e.g) `ϕsi_old = map(Interpolations.interpolate!, copy(ϕs_old))`
 """
 function compose(ϕsi_old::AbstractVector{G1}, ϕs_new::AbstractVector{G2}) where {G1<:GridDeformation, G2<:GridDeformation}
@@ -293,11 +328,15 @@ function compose(f::Function, ϕ_new::GridDeformation{T,N}) where {T,N}
 end
 
 """
-`ϕ = tform2deformation(tform, imgaxes, gridsize)` constructs a deformation
-`ϕ` from the affine transform `tform` suitable for warping arrays
-with axes `imgaxes`.  The array of grid points defining `ϕ` has
+    ϕ = tform2deformation(tform, imgaxes, gridsize)
+
+Construct a deformation `ϕ` from the affine transform `tform` suitable
+for warping arrays with axes `imgaxes`.  The array of grid points defining `ϕ` has
 size specified by `gridsize`.  The dimensionality of `tform` must
 match that specified by `arraysize` and `gridsize`.
+
+Note it's more accurate to `warp(img, tform)` directly; the main use of this function
+is to initialize a GridDeformation for later optimization.
 """
 function tform2deformation(tform::AffineMap{M,V},
                            imgaxes::NTuple{N,<:AbstractUnitRange},
