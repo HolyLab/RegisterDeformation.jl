@@ -41,6 +41,11 @@ checkϕdims(ϕs::Vector{D}, N, n) where {D<:AbstractDeformation} = length(ϕs) =
 
 
 # TODO?: do we need to return real values beyond-the-edge for a SubArray?
+
+floattype(::Type{T}) where T<:AbstractFloat = T
+floattype(::Type{<:Integer}) = Float64
+floattype(::Type{SVector{N,T}}) where {N,T} = floattype(T)
+
 nanvalue(::Type{T}) where T<:Real = convert(promote_type(T, Float32), NaN)
 nanvalue(::Type{C}) where C<:AbstractGray = Gray(nanvalue(eltype(C)))
 nanvalue(::Type{C}) where C<:AbstractRGB  = (x = nanvalue(eltype(C)); RGB(x, x, x))
@@ -52,6 +57,11 @@ to_etp(itp::AbstractInterpolation) = extrapolate(itp, convert(promote_type(eltyp
 to_etp(etp::AbstractExtrapolation) = etp
 
 to_etp(img, A::AffineMap) = TransformedArray(to_etp(img), A)
+
+getcoefs(ϕ::GridDeformation) = getcoefs(ϕ.u)
+getcoefs(itp::AbstractInterpolation) = getcoefs(itp.itp)
+getcoefs(itp::Interpolations.BSplineInterpolation) = itp.coefs
+getcoefs(u::AbstractArray{<:SVector}) = u
 
 # Extensions to Interpolations and StaticArrays
 @generated function vecindex(A::AbstractArray, x::SVector{N}) where N

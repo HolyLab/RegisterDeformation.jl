@@ -3,7 +3,7 @@
 This package represents spatial deformations, sometimes also called diffeomorphisms or warps.
 Under a deformation, a rectangular grid might change into something like this:
 
-![diffeo](https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/Diffeomorphism_of_a_square.svg/560px-Diffeomorphism_of_a_square.svg.png)
+![diffeo](https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/Diffeomorphism_of_a_square.svg/240px-Diffeomorphism_of_a_square.svg.png)
 
 A deformation (or warp) of space is represented by a function `ϕ(x)`.
 For an image, the warped version of the image is specified by "looking
