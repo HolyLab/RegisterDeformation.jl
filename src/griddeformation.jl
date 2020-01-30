@@ -137,24 +137,76 @@ Base.copy(ϕ::GridDeformation{T,N,A,L}) where {T,N,A,L} = (u = copy(ϕ.u); GridD
 # end
 # (but there are several challenges, including the lack of a continuous gradient)
 
-function Interpolations.interpolate(ϕ::GridDeformation, BC)
+
+"""
+    ϕi = interpolate(ϕ, BC=Flat(OnCell()))
+
+Create a deformation `ϕi` suitable for interpolation, matching the displacements
+of `ϕ.u` at the nodes. A quadratic interpolation scheme is used, with default
+flat boundary conditions.
+"""
+function Interpolations.interpolate(ϕ::GridDeformation, BC=Flat(OnCell()))
     itp = scale(interpolate(ϕ.u, BSpline(Quadratic(BC))), ϕ.nodes...)
     GridDeformation(itp)
 end
-Interpolations.interpolate(ϕ::GridDeformation) = interpolate(ϕ, Flat(OnCell()))
 
-function Interpolations.interpolate!(ϕ::GridDeformation, BC)
+"""
+    ϕi = interpolate!(ϕ, BC=InPlace(OnCell()))
+
+Create a deformation `ϕi` suitable for interpolation, matching the displacements
+of `ϕ.u` at the nodes. `ϕ` is destroyed in the process.
+
+A quadratic interpolation scheme is used, with the default being to use "InPlace"
+boundary conditions.
+
+!!! warning
+    Because of the difference in default boundary conditions,
+    `interpolate!(copy(ϕ))` does *not* yield a result identical to `interpolate(ϕ)`.
+    When it matters, it is recommended that you annotate such calls with
+    `# not same as interpolate(ϕ)` in your code.
+"""
+function Interpolations.interpolate!(ϕ::GridDeformation, BC=InPlace(OnCell()))
     itp = scale(interpolate!(ϕ.u, BSpline(Quadratic(BC))), ϕ.nodes...)
     GridDeformation(itp)
 end
-Interpolations.interpolate!(ϕ::GridDeformation) = interpolate!(ϕ, InPlace(OnCell()))
 
-Interpolations.interpolate(ϕ::GridDeformation{T,N,A}) where { T,N,A<:AbstractInterpolation} = error("ϕ is already interpolating")
-
-Interpolations.interpolate!(ϕ::GridDeformation{T,N,A}) where {T,N,A<:AbstractInterpolation} = error("ϕ is already interpolating")
+Interpolations.interpolate(ϕ::InterpolatingDeformation, args...) = error("ϕ is already interpolating")
+Interpolations.interpolate!(ϕ::InterpolatingDeformation, args...) = error("ϕ is already interpolating")
 
 function vecindex(ϕ::GridDeformation{T,N,A}, x::SVector{N}) where {T,N,A<:AbstractInterpolation}
     x + vecindex(ϕ.u, x)
+end
+
+"""
+    ϕ = similarϕ(ϕref, coefs)
+
+Create a deformation with the same nodes as `ϕref` but using `coefs` for the data.
+This is primarily useful for testing purposes, e.g., computing gradients with
+`ForwardDiff` where the elements are `ForwardDiff.Dual` numbers.
+
+If `ϕref` is interpolating, `coefs` will be used for the interpolation coefficients,
+not the node displacements. Typically you want to create `ϕref` with
+
+    ϕref = interpolate!(copy(ϕ0))
+
+rather than `interpolate(ϕ0)` (see [`interpolate!`](@ref)).
+"""
+function similarϕ(ϕref, coefs::AbstractArray{<:Number})
+    coefsref = getcoefs(ϕref)
+    N = ndims(coefsref)
+    udata = convert_to_fixed(SVector{N,eltype(coefs)}, coefs, size(coefsref))
+    return similarϕ(ϕref, udata)
+end
+
+similarϕ(ϕref, udata::AbstractArray{<:SVector}) = _similarϕ(ϕref, udata)
+
+_similarϕ(ϕref::GridDeformation, udata) = GridDeformation(udata, ϕref.nodes)
+
+function _similarϕ(ϕref::InterpolatingDeformation, udata)
+    scaleref = ϕref.u
+    itpref = scaleref.itp
+    itp = Interpolations.BSplineInterpolation(floattype(eltype(udata)), udata, itpref.it, itpref.parentaxes)
+    return GridDeformation(scale(itp, ϕref.nodes...))
 end
 
 # @generated function Base.getindex(ϕ::GridDeformation{T,N,A}, xs::Vararg{Number,N}) where {T,N,A<:AbstractInterpolation}

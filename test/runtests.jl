@@ -98,6 +98,25 @@ end
     @test all(u[2,:,:] .== s[2])
 end
 
+@testset "similarϕ" begin
+    uref = reshape([1.5, -0.3, 0.8], 1, 3)
+    nodes = (0:5:10,)
+    ϕref = GridDeformation(uref, nodes)
+    unew = [0.7, 0.4, -0.33]
+    ϕnew = similarϕ(ϕref, unew)
+    ϕi = interpolate!(copy(ϕnew))
+    @test ϕi.u(0)  ≈ SVector(0.7)
+    @test ϕi.u(5)  ≈ SVector(0.4)
+    @test ϕi.u(10) ≈ SVector(-0.33)
+
+    ucoefs = copy(ϕi.u.itp.coefs)
+    ϕiref = interpolate!(copy(ϕref))
+    ϕi = similarϕ(ϕiref, ucoefs)
+    @test ϕi.u(0)  ≈ SVector(0.7)
+    @test ϕi.u(5)  ≈ SVector(0.4)
+    @test ϕi.u(10) ≈ SVector(-0.33)
+end
+
 @testset "warp" begin
     # Ensure there is no conflict between ImageTransformations and RegisterDeformation
     tform = tformrotate(pi/4)

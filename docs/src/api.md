@@ -7,6 +7,14 @@ GridDeformation
 tform2deformation
 griddeformations
 regrid
+similarϕ
+```
+
+## Conversion to interpolating form
+
+```@docs
+interpolate(::GridDeformation)
+interpolate!(::GridDeformation)
 ```
 
 ## Warping images
