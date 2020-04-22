@@ -5,7 +5,7 @@ using StaticArrays, LinearAlgebra, Distributed, Statistics
 using AxisArrays: AxisArray
 using OffsetArrays
 using Test
-using RegisterDeformation, RegisterUtilities
+using RegisterDeformation.RegisterUtilities
 using JLD2, HDF5, FileIO
 using ImageFiltering
 
@@ -18,6 +18,19 @@ using ImageFiltering
         @test knt[1] == nodesall[1][i]
         @test knt[2] == nodesall[2][i]
     end
+end
+
+@testset "Interpolation and extrapolation" begin
+    nodes = (range(1, stop=15, length=5), range(1, stop=11, length=3))
+    u = randn(length(nodes), map(length, nodes)...)
+    ϕ = GridDeformation(u, nodes)
+    ϕi = interpolate(ϕ)
+    ϕe = extrapolate(ϕ)
+    @test extrapolate(ϕi) == ϕe
+
+    ϕi = interpolate!(copy(ϕ))
+    ϕe = extrapolate!(copy(ϕ))
+    @test extrapolate(ϕi) == ϕe
 end
 
 @testset "Deformation tests" begin
@@ -261,6 +274,22 @@ end
         gj[rng,rng] = Matrix{Float64}(I,2,2)
     end
     compare_g(g, gj, gridsize)
+
+    # Extrapolation (issue #7)
+    gridsize = (3,3)
+    img = rand(10,10)
+    tform = AffineMap(1.3, [0.1, 0.1])
+    ϕ = tform2deformation(tform, axes(img), gridsize)
+    θ = tform2deformation(tform, axes(img), gridsize)
+
+    ϕ = extrapolate!(ϕ)
+    ϕθ = ϕ(θ)
+    ϕθi = interpolate(ϕθ)
+    θi = interpolate(θ)
+    x = SVector(7, 3)
+    @test norm(ϕθi(x) - tform(tform(x))) <= 2*norm(ϕ(θi(x)) - tform(tform(x)))
+    x = SVector(3, 7)
+    @test norm(ϕθi(x) - tform(tform(x))) <= 2*norm(ϕ(θi(x)) - tform(tform(x)))
 end
 
 @testset "warpgrid" begin

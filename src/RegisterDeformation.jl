@@ -21,6 +21,8 @@ export
     centeraxes,
     compose,
     eachnode,
+    extrapolate,
+    extrapolate!,
     getindex!,
     griddeformations,
     interpolate,
