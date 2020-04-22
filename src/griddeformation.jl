@@ -151,6 +151,26 @@ function Interpolations.interpolate(ϕ::GridDeformation, BC=Flat(OnCell()))
 end
 
 """
+    ϕi = extrapolate(ϕ, BC=Flat(OnCell()))
+
+Create a deformation `ϕi` suitable for interpolation, matching the displacements
+of `ϕ.u` at the nodes. A quadratic interpolation scheme is used, with default
+flat boundary conditions and `Line` extrapolation.
+
+!!! warning
+    Extrapolation beyond the supported region of `ϕ` can yield poor results.
+"""
+function Interpolations.extrapolate(ϕ::GridDeformation, BC=Flat(OnCell()))
+    etp = _extrapolate(ϕ.u, ϕ.nodes, BC)
+    GridDeformation(etp)
+end
+
+_extrapolate(A::AbstractArray, nodes, BC) = _extrapolate(interpolate(A, BSpline(Quadratic(BC))), nodes, BC)
+_extrapolate(A::AbstractInterpolation, nodes, BC) = _extrapolate(extrapolate(A, Line()), nodes, BC)
+_extrapolate(A::AbstractExtrapolation, nodes, BC) = scale(A, nodes...)
+_extrapolate(A::ScaledInterpolation, nodes, BC) = _extrapolate(A.itp, nodes, BC)
+
+"""
     ϕi = interpolate!(ϕ, BC=InPlace(OnCell()))
 
 Create a deformation `ϕi` suitable for interpolation, matching the displacements
@@ -172,6 +192,29 @@ end
 
 Interpolations.interpolate(ϕ::InterpolatingDeformation, args...) = error("ϕ is already interpolating")
 Interpolations.interpolate!(ϕ::InterpolatingDeformation, args...) = error("ϕ is already interpolating")
+
+"""
+    ϕi = extrapolate!(ϕ, BC=InPlace(OnCell()))
+
+Create a deformation `ϕi` suitable for interpolation, matching the displacements
+of `ϕ.u` at the nodes. `ϕ` is destroyed in the process.
+
+A quadratic interpolation scheme is used, with the default being to use "InPlace"
+boundary conditions.
+
+!!! warning
+    Because of the difference in default boundary conditions,
+    `extrapolate!(copy(ϕ))` does *not* yield a result identical to `extrapolate(ϕ)`.
+    When it matters, it is recommended that you annotate such calls with
+    `# not same as extrapolate(ϕ)` in your code.
+"""
+function extrapolate!(ϕ::GridDeformation, BC=InPlace(OnCell()))
+    etp = _extrapolate!(ϕ.u, ϕ.nodes, BC)
+    GridDeformation(etp)
+end
+
+_extrapolate!(A, nodes, BC) = _extrapolate(interpolate!(A, BSpline(Quadratic(BC))), nodes, BC)
+_extrapolate!(A::AbstractInterpolation, nodes, BC) = error("ϕ is already interpolating")
 
 function vecindex(ϕ::GridDeformation{T,N,A}, x::SVector{N}) where {T,N,A<:AbstractInterpolation}
     x + vecindex(ϕ.u, x)
@@ -393,7 +436,7 @@ is to initialize a GridDeformation for later optimization.
 function tform2deformation(tform::AffineMap{M,V},
                            imgaxes::NTuple{N,<:AbstractUnitRange},
                            gridsize::NTuple{N,<:Integer}) where {M,V,N}
-    A = tform.linear - SMatrix{N,N,Float64}(I)  # this will compute the difference
+    A = deltalinear(tform.linear)
     u = Array{SVector{N,eltype(M)}}(undef, gridsize...)
     nodes = map(imgaxes, gridsize) do ax, g
         range(first(ax), stop=last(ax), length=g)
@@ -404,3 +447,11 @@ function tform2deformation(tform::AffineMap{M,V},
     end
     GridDeformation(u, nodes)
 end
+
+"""
+    deltalinear(linear)
+
+Compute the difference between `linear` and the identity transformation.
+"""
+deltalinear(scale::Number) = (scale - 1)*I
+deltalinear(mtrx::AbstractMatrix) = mtrx - I

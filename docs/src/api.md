@@ -15,6 +15,8 @@ similarϕ
 ```@docs
 interpolate(::GridDeformation)
 interpolate!(::GridDeformation)
+extrapolate(::GridDeformation)
+extrapolate!(::GridDeformation)
 ```
 
 ## Warping images
