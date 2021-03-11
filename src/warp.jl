@@ -62,7 +62,7 @@ An alternative syntax is `warp!(T, io, img, uarray; [nworkers=1])`,
 where `uarray` is an array of `u` values with `size(uarray)[end] ==
 nimages(img)`.
 """
-function warp!(::Type{T}, dest::Union{IO,HDF5Dataset,JLD2.JLDFile}, img, ϕs; nworkers=1) where T
+function warp!(::Type{T}, dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, img, ϕs; nworkers=1) where T
     n = nimages(img)
     saxs = indices_spatial(img)
     ssz = map(length, saxs)
@@ -86,9 +86,9 @@ function warp!(::Type{T}, dest::Union{IO,HDF5Dataset,JLD2.JLDFile}, img, ϕs; nw
     nothing
 end
 
-warp!(::Type{T}, dest::Union{IO,HDF5Dataset,JLD2.JLDFile}, img, u::AbstractArray{R}; kwargs...) where {T,R<:Real} = warp!(T, dest, img, Array(convert_to_fixed(u)); kwargs...)
+warp!(::Type{T}, dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, img, u::AbstractArray{R}; kwargs...) where {T,R<:Real} = warp!(T, dest, img, Array(convert_to_fixed(u)); kwargs...)
 
-warp!(dest::Union{HDF5Dataset,JLD2.JLDFile}, img, u; nworkers=1) =
+warp!(dest::Union{HDF5.Dataset,JLD2.JLDFile}, img, u; nworkers=1) =
     warp!(eltype(dest), dest, img, u; nworkers=nworkers)
 
 function _warp!(::Type{T}, dest, img, ϕs, nworkers) where T
