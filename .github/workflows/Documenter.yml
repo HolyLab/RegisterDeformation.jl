@@ -11,6 +11,8 @@ jobs:
       runs-on: ubuntu-latest
       steps:
         - uses: actions/checkout@v2
+        - name: Install HolyLab Registry
+          run: julia -e 'using Pkg; Pkg.Registry.add([RegistrySpec(name="General"),RegistrySpec(url="https://github.com/HolyLab/HolyLabRegistry")]);'
         - uses: julia-actions/julia-buildpkg@latest
         - uses: julia-actions/julia-docdeploy@latest
           env:
