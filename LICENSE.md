@@ -1,4 +1,4 @@
-The Revise.jl package is licensed under the MIT "Expat" License:
+The RegisterDeformation.jl package is licensed under the MIT "Expat" License:
 
 > Copyright (c) 2013-2021: Tim Holy.
 >
