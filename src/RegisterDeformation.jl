@@ -8,7 +8,7 @@ using Interpolations: AbstractInterpolation, AbstractExtrapolation
 import ImageTransformations: warp, warp!
 # to avoid `scale` conflict with Interpolations, selectively import CoordinateTransformations:
 using CoordinateTransformations: AffineMap
-import CoordinateTransformations: compose, transform
+import CoordinateTransformations: compose
 using OffsetArrays: IdentityUnitRange   # for Julia-version compatibility
 
 export
