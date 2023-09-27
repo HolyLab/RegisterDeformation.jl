@@ -1,7 +1,7 @@
 name = "RegisterDeformation"
 uuid = "c19381b7-cf49-59d7-881c-50dfbd227eaf"
 authors = ["Tim Holy <tim.holy@gmail.com>"]
-version = "0.4.5"
+version = "0.4.6"
 
 [deps]
 AxisArrays = "39de3d68-74b9-583c-8d2d-e117c070f3a9"
@@ -33,8 +33,8 @@ FileIO = "1"
 ForwardDiff = "0.10"
 HDF5 = "0.14, 0.15, 0.16"
 ImageAxes = "0.5, 0.6"
-ImageCore = "0.8.1, 0.9"
-ImageTransformations = "0.8, 0.9"
+ImageCore = "0.8.1, 0.9, 0.10"
+ImageTransformations = "0.8, 0.9, 0.10"
 Interpolations = "0.12.8, 0.13, 0.14"
 JLD2 = "0.1, 0.4"
 OffsetArrays = "0.10, 0.11, 1"
