@@ -78,7 +78,7 @@ function warp!(::Type{T}, dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, img, ϕs; n
         return _warp!(T, dest, img, ϕs, nworkers)
     end
     destarray = Array{T}(undef, ssz)
-    @showprogress 1 "Stacks:" for i = 1:n
+    @showprogress dt=1 desc="Stacks:" for i = 1:n
         ϕ = extracti(ϕs, i, saxs)
         warp!(destarray, view(img, timeaxis(img)(i)), ϕ)
         warp_write(dest, destarray, i)
@@ -112,7 +112,7 @@ function _warp!(::Type{T}, dest, img, ϕs, nworkers) where T
     nextidx = 0
     getnextidx() = nextidx += 1
     writing_mutex = RemoteChannel()
-    prog = Progress(n, 1, "Stacks:")
+    prog = Progress(n; dt=1, desc="Stacks:")
     @sync begin
         for i = 1:nworkers
             p = wpids[i]
