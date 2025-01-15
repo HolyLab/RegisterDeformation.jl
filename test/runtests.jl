@@ -1,5 +1,6 @@
 #import BlockRegistration
 using RegisterDeformation
+using RegisterDeformation: arraysize
 using CoordinateTransformations, Interpolations, ImageCore, ForwardDiff
 using StaticArrays, LinearAlgebra, Distributed, Statistics
 using AxisArrays: AxisArray
