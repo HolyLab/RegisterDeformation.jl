@@ -3,6 +3,7 @@ on:
   issue_comment:
     types:
       - created
+  repository_dispatch:
   workflow_dispatch:
     inputs:
       lookback:
