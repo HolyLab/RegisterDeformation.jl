@@ -50,4 +50,4 @@ Base.axes(A::WarpedArray, i::Integer) = axes(A.data, i)
 end
 
 ImageAxes.getindex!(dest, W::WarpedArray{T, N}, coords::Vararg{Any, N}) where {T, N} =
-    Base._unsafe_getindex!(dest, W, coords...)
+    copyto!(dest, view(W, coords...))

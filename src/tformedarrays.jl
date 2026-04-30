@@ -1,5 +1,3 @@
-using CoordinateTransformations, Requires
-import Interpolations: AbstractExtrapolation
 export TransformedArray
 
 """
