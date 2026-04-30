@@ -15,37 +15,37 @@ A = TransformedArray(etp, tfm)
 where `etp` is an extrapolation object as defined by the
 Interpolations package, and `tfm` is an `AffineMap`.
 """
-struct TransformedArray{T,N,E<:AbstractExtrapolation,Tf<:AffineMap} <: AbstractArray{T,N}
+struct TransformedArray{T, N, E <: AbstractExtrapolation, Tf <: AffineMap} <: AbstractArray{T, N}
     data::E
     tform::Tf
 end
-TransformedArray(etp::AbstractExtrapolation{T,N}, a::AffineMap) where {T,N} =
-    TransformedArray{T,N,typeof(etp),typeof(a)}(etp, a)
+TransformedArray(etp::AbstractExtrapolation{T, N}, a::AffineMap) where {T, N} =
+    TransformedArray{T, N, typeof(etp), typeof(a)}(etp, a)
 
 function TransformedArray(A::AbstractInterpolation, a::AffineMap)
     etp = extrapolate(A, NaN)
-    TransformedArray(etp, a)
+    return TransformedArray(etp, a)
 end
 
 function TransformedArray(A::AbstractArray, a::AffineMap)
     itp = interpolate(A, BSpline(Linear()))
-    TransformedArray(itp, a)
+    return TransformedArray(itp, a)
 end
 
 
 Base.size(A::TransformedArray) = size(A.data)
 
-function Base.getindex(A::TransformedArray{T,2}, i::Number, j::Number) where T
-    x, y = A.tform([i,j]) #tformfwd(A.tform, i, j)
-    A.data(x, y)
+function Base.getindex(A::TransformedArray{T, 2}, i::Number, j::Number) where {T}
+    x, y = A.tform([i, j]) #tformfwd(A.tform, i, j)
+    return A.data(x, y)
 end
 
-function Base.getindex(A::TransformedArray{T,3}, i::Number, j::Number, k::Number) where T
-    x, y, z = A.tform([i,j,k]) #tformfwd(A.tform, i, j, k)
-    A.data(x, y, z)
+function Base.getindex(A::TransformedArray{T, 3}, i::Number, j::Number, k::Number) where {T}
+    x, y, z = A.tform([i, j, k]) #tformfwd(A.tform, i, j, k)
+    return A.data(x, y, z)
 end
 
-Base.similar(A::TransformedArray, ::Type{T}, dims::Dims) where T = Array{T}(dims)
+Base.similar(A::TransformedArray, ::Type{T}, dims::Dims) where {T} = Array{T}(dims)
 
 """
 `transform(A, tfm; origin_dest=center(A), origin_src=center(A)`
@@ -65,13 +65,13 @@ as `transform`, offset the origin of the transform used to construct
 origin_src - tform.linear*origin_dest
 ```
 """
-function transform(A::TransformedArray{T,N}; kwargs...) where {T,N}
+function transform(A::TransformedArray{T, N}; kwargs...) where {T, N}
     y = A.tform(ones(Int, N))
-    yt = (y...,)::NTuple{N,eltype(y)}
+    yt = (y...,)::NTuple{N, eltype(y)}
     a = A.data(yt...)
     dest = Array{typeof(a)}(undef, size(A))
     transform!(dest, A; kwargs...)
-    dest
+    return dest
 end
 
 transform(A, a::AffineMap; kwargs...) = transform(TransformedArray(A, a); kwargs...)
@@ -84,72 +84,79 @@ pre-allocated output array `dest`.
 If `src` is already a TransformedArray, use `transform!(dest, src;
 kwargs...)`.
 """
-function transform!(dest::AbstractArray{S,N},
-                    src::TransformedArray{T,N};
-                    origin_dest = center(dest),
-                    origin_src = center(src)) where {S,T,N}
+function transform!(
+        dest::AbstractArray{S, N},
+        src::TransformedArray{T, N};
+        origin_dest = center(dest),
+        origin_src = center(src)
+    ) where {S, T, N}
     tform = src.tform
     if tform.linear == Matrix{T}(I, N, N) && tform.translation == zeros(N) && size(dest) == size(src) && origin_dest == origin_src
         copyto!(dest, src)
         return dest
     end
-    offset = tform.translation - tform.linear*origin_dest + origin_src
-    _transform!(dest, src, offset)
+    offset = tform.translation - tform.linear * origin_dest + origin_src
+    return _transform!(dest, src, offset)
 end
 
 transform!(dest, src, a::AffineMap; kwargs...) = transform!(dest, TransformedArray(src, a); kwargs...)
 
-@require ImageMetadata="bc367c6b-8a6b-528e-b4bd-a4b897500b49" begin
+@require ImageMetadata = "bc367c6b-8a6b-528e-b4bd-a4b897500b49" begin
     transform(A::ImageMetadata.ImageMeta, a::AffineMap; kwargs...) = ImageMetadata.copyproperties(A, transform(ImageMetadata.data(A), a; kwargs...))
     transform!(dest, A::ImageMetadata.ImageMeta, a::AffineMap; kwargs...) = ImageMetadata.copyproperties(A, transform!(dest, ImageMetadata.data(A), a; kwargs...))
 end
 
 # For a FilledExtrapolation, this is designed to (usually) avoid evaluating
 # the interpolation unless it is in-bounds.  This often improves performance.
-@generated function _transform!(dest::AbstractArray{S,N},
-                                src::TransformedArray{T,N,E},
-                                offset) where {S,T,N,E<:Interpolations.FilledExtrapolation}
+@generated function _transform!(
+        dest::AbstractArray{S, N},
+        src::TransformedArray{T, N, E},
+        offset
+    ) where {S, T, N, E <: Interpolations.FilledExtrapolation}
     # Initialize the final column of s "matrix," e.g., s_1_3 = A_1_3 + o_3
     # s stands for source-coordinates. The first "column," s_d_1, corresponds
     # to the actual interpolation position. The later columns simply cache
     # previous computations.
-    sN = ntuple(i->Expr(:(=), Symbol(string("s_",i,"_$N")), Expr(:call, :+, Symbol(string("A_",i,"_$N")), Symbol(string("o_",i)))), N)
-    quote
+    sN = ntuple(i -> Expr(:(=), Symbol(string("s_", i, "_$N")), Expr(:call, :+, Symbol(string("A_", i, "_$N")), Symbol(string("o_", i)))), N)
+    return quote
         tform = src.tform
         data = src.data
-        @nexprs $N d->(o_d = offset[d])
-        @nexprs $N j->(@nexprs $N i->(A_i_j = tform.linear[i,j]))
+        @nexprs $N d -> (o_d = offset[d])
+        @nexprs $N j -> (@nexprs $N i -> (A_i_j = tform.linear[i, j]))
         fill!(dest, data.fillvalue)
         $(sN...)
-        @nloops($N,i,d->(d>1 ? (1:size(dest,d)) : (imin:imax)),
-                # The pre-expression chooses the range within each column that will be in-bounds
-                d->(d >  2 ? (@nexprs $N e->s_e_{d-1}=A_e_{d-1}+s_e_d) :
+        @nloops(
+            $N, i, d -> (d > 1 ? (1:size(dest, d)) : (imin:imax)),
+            # The pre-expression chooses the range within each column that will be in-bounds
+            d -> (
+                d > 2 ? (@nexprs $N e -> s_e_{d - 1} = A_e_{d - 1} + s_e_d) :
                     d == 2 ? begin
                         imin = 1
-                        imax = size(dest,1)
-                        @nexprs $N e->((imin, imax) = irange(imin, imax, A_e_1, s_e_2, size(data, e)))
-                        @nexprs $N e->(s_e_1=A_e_1*imin+s_e_d)
+                        imax = size(dest, 1)
+                        @nexprs $N e -> ((imin, imax) = irange(imin, imax, A_e_1, s_e_2, size(data, e)))
+                        @nexprs $N e -> (s_e_1 = A_e_1 * imin + s_e_d)
                     end :
-                    nothing), # pre
-            d->(@nexprs $N e->(s_e_d += A_e_d)), # post
+                    nothing
+            ), # pre
+            d -> (@nexprs $N e -> (s_e_d += A_e_d)), # post
             # Perform the interpolation of the source data
-            @inbounds (@nref $N dest i) = (@ncall $N data d->s_d_1)
+            @inbounds (@nref $N dest i) = (@ncall $N data d -> s_d_1)
         )
         dest
     end
 end
 
-center(A::AbstractArray) = [(size(A,d)+1)/2 for d = 1:ndims(A)]
+center(A::AbstractArray) = [(size(A, d) + 1) / 2 for d in 1:ndims(A)]
 
 # Find i such that
 #      imin <= i <= imax
 #      1 <= coef*i+offset <= upper
 function irange(imin::Int, imax::Int, coef, offset, upper)
-    thresh = 10^4/typemax(Int)  # needed to avoid InexactError for results with abs() bigger than typemax
+    thresh = 10^4 / typemax(Int)  # needed to avoid InexactError for results with abs() bigger than typemax
     if coef > thresh
-        return max(imin, floor(Int, (1-offset)/coef)), min(imax, ceil(Int, (upper-offset)/coef))
+        return max(imin, floor(Int, (1 - offset) / coef)), min(imax, ceil(Int, (upper - offset) / coef))
     elseif coef < -thresh
-        return max(imin, floor(Int, (upper-offset)/coef)), min(imax, ceil(Int, (1-offset)/coef))
+        return max(imin, floor(Int, (upper - offset) / coef)), min(imax, ceil(Int, (1 - offset) / coef))
     else
         if 1 <= offset <= upper
             return imin, imax

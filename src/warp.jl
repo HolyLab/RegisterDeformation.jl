@@ -1,4 +1,3 @@
-
 """
 `wimg = warp(img, ϕ)` warps the array `img` according to the
 deformation `ϕ`.
@@ -6,19 +5,19 @@ deformation `ϕ`.
 function warp(img::AbstractArray, ϕ::AbstractDeformation)
     wimg = WarpedArray(img, ϕ)
     dest = similar(img, warp_type(img))
-    warp!(dest, wimg)
+    return warp!(dest, wimg)
 end
 
-warp_type(img::AbstractArray{T}) where {T<:AbstractFloat} = T
-warp_type(img::AbstractArray{T}) where {T<:Number} = Float32
-warp_type(img::AbstractArray{C}) where {C<:Colorant} = warp_type(img, eltype(eltype(C)))
-warp_type(img::AbstractArray{C}, ::Type{T}) where {C<:Colorant, T<:AbstractFloat} = C
-warp_type(img::AbstractArray{C}, ::Type{T}) where {C<:Colorant, T} = base_colorant_type(C){Float32}
+warp_type(img::AbstractArray{T}) where {T <: AbstractFloat} = T
+warp_type(img::AbstractArray{T}) where {T <: Number} = Float32
+warp_type(img::AbstractArray{C}) where {C <: Colorant} = warp_type(img, eltype(eltype(C)))
+warp_type(img::AbstractArray{C}, ::Type{T}) where {C <: Colorant, T <: AbstractFloat} = C
+warp_type(img::AbstractArray{C}, ::Type{T}) where {C <: Colorant, T} = base_colorant_type(C){Float32}
 
 """
 `warp!(dest, src::WarpedArray)` instantiates a `WarpedArray` in the output `dest`.
 """
-function warp!(dest::AbstractArray{T,N}, src::WarpedArray) where {T,N}
+function warp!(dest::AbstractArray{T, N}, src::WarpedArray) where {T, N}
     axes(dest) == axes(src) || throw(DimensionMismatch("dest must have the same axes as src"))
     destiter = CartesianIndices(axes(dest))
     I, deststate = iterate(destiter)
@@ -38,7 +37,7 @@ result is stored in `dest`.
 """
 function warp!(dest::AbstractArray, img::AbstractArray, ϕ::AbstractDeformation)
     wimg = WarpedArray(to_etp(img), ϕ)
-    warp!(dest, wimg)
+    return warp!(dest, wimg)
 end
 
 """
@@ -46,7 +45,7 @@ end
 """
 function warp!(dest::AbstractArray, img::AbstractArray, A::AffineMap, ϕ::AbstractDeformation)
     wimg = WarpedArray(to_etp(img, A), ϕ)
-    warp!(dest, wimg)
+    return warp!(dest, wimg)
 end
 
 """
@@ -63,7 +62,7 @@ An alternative syntax is `warp!(io, img, uarray; [eltype=Float32, nworkers=1])`,
 where `uarray` is an array of `u` values with `size(uarray)[end] ==
 nimages(img)`.
 """
-function warp!(dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, img, ϕs; eltype::Type=Float32, nworkers=1)
+function warp!(dest::Union{IO, HDF5.Dataset, JLD2.JLDFile}, img, ϕs; eltype::Type = Float32, nworkers = 1)
     T = eltype
     n = nimages(img)
     saxs = indices_spatial(img)
@@ -80,21 +79,21 @@ function warp!(dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, img, ϕs; eltype::Type
         return _warp!(T, dest, img, ϕs, nworkers)
     end
     destarray = Array{T}(undef, ssz)
-    @showprogress dt=1 desc="Stacks:" for i = 1:n
+    @showprogress dt = 1 desc = "Stacks:" for i in 1:n
         ϕ = extracti(ϕs, i, saxs)
         warp!(destarray, view(img, timeaxis(img)(i)), ϕ)
         warp_write(dest, destarray, i)
     end
-    nothing
+    return nothing
 end
 
-warp!(dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, img, u::AbstractArray{<:Real}; kwargs...) =
+warp!(dest::Union{IO, HDF5.Dataset, JLD2.JLDFile}, img, u::AbstractArray{<:Real}; kwargs...) =
     warp!(dest, img, Array(convert_to_fixed(u)); kwargs...)
 
-warp!(dest::Union{HDF5.Dataset,JLD2.JLDFile}, img, u; nworkers=1) =
-    warp!(dest, img, u; eltype=Base.eltype(dest), nworkers)
+warp!(dest::Union{HDF5.Dataset, JLD2.JLDFile}, img, u; nworkers = 1) =
+    warp!(dest, img, u; eltype = Base.eltype(dest), nworkers)
 
-function _warp!(::Type{T}, dest, img, ϕs, nworkers) where T
+function _warp!(::Type{T}, dest, img, ϕs, nworkers) where {T}
     n = nimages(img)
     saxs = indices_spatial(img)
     ssz = map(length, saxs)
@@ -103,21 +102,21 @@ function _warp!(::Type{T}, dest, img, ϕs, nworkers) where T
     swarped = Vector{Any}()
     rrs = Vector{RemoteChannel}()
     mydir = splitdir(@__FILE__)[1]
-    pkgbase = String(chop(mydir,tail=4))
+    pkgbase = String(chop(mydir, tail = 4))
     for p in wpids
         remotecall_fetch(Main.eval, p, :(using Pkg))
         remotecall_fetch(Main.eval, p, :(Pkg.activate($pkgbase)))
         remotecall_fetch(Main.eval, p, :(push!(LOAD_PATH, $mydir)))
         remotecall_fetch(Main.eval, p, :(using RegisterDeformation))
-        push!(simg, SharedArray{eltype(img)}(ssz, pids=[myid(),p]))
-        push!(swarped, SharedArray{T}(ssz, pids=[myid(),p]))
+        push!(simg, SharedArray{eltype(img)}(ssz, pids = [myid(), p]))
+        push!(swarped, SharedArray{T}(ssz, pids = [myid(), p]))
     end
     nextidx = 0
     getnextidx() = nextidx += 1
     writing_mutex = RemoteChannel()
-    prog = Progress(n; dt=1, desc="Stacks:")
+    prog = Progress(n; dt = 1, desc = "Stacks:")
     @sync begin
-        for i = 1:nworkers
+        for i in 1:nworkers
             p = wpids[i]
             src = simg[i]
             warped = swarped[i]
@@ -135,18 +134,18 @@ function _warp!(::Type{T}, dest, img, ϕs, nworkers) where T
         end
     end
     finish!(prog)
-    nothing
+    return nothing
 end
 
 warp_write(io::IO, destarray) = write(io, destarray)
 function warp_write(io::IO, destarray, i)
-    offset = (i-1)*length(destarray)*sizeof(eltype(destarray))
+    offset = (i - 1) * length(destarray) * sizeof(eltype(destarray))
     seek(io, offset)
-    write(io, destarray)
+    return write(io, destarray)
 end
 function warp_write(dest, destarray, i)
-    colons = [Colon() for d = 1:ndims(destarray)]
-    dest[colons..., i] = destarray
+    colons = [Colon() for d in 1:ndims(destarray)]
+    return dest[colons..., i] = destarray
 end
 
 """
@@ -161,6 +160,6 @@ of `A`.
 function translate(A::AbstractArray, displacement::Union{AbstractVector{<:Integer}, Dims})
     disp = zeros(Int, ndims(A))
     disp[[coords_spatial(A)...]] = displacement
-    indx = UnitRange{Int}[ axes(A, i) .+ disp[i] for i = 1:ndims(A) ]
-    get(A, indx, NaN)
+    indx = UnitRange{Int}[ axes(A, i) .+ disp[i] for i in 1:ndims(A) ]
+    return get(A, indx, NaN)
 end
