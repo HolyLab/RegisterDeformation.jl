@@ -134,15 +134,21 @@ end
 
 # Wrapping functions to interface with CoordinateTransfromations instead of AffineTransfroms module
 tformeye(m::Int) = AffineMap(Matrix{Float64}(I,m,m), zeros(m))
-tformtranslate(trans::Vector) = (m = length(trans); AffineMap(Matrix{Float64}(I,m,m), trans))
+tformtranslate(trans::AbstractVector) = (m = length(trans); AffineMap(Matrix{Float64}(I,m,m), trans))
 
+"""
+    rotation2(angle) -> RotMatrix
+
+Construct a 2D rotation matrix from `angle` (in radians). Returns a `RotMatrix`
+(from Rotations.jl), not an `AffineMap`. Use `tformrotate(angle)` to get an `AffineMap`.
+"""
 rotation2(angle) = RotMatrix(angle)
 function tformrotate(angle)
     A = RotMatrix(angle)
     AffineMap(A, zeros(eltype(A),2))
 end
 
-function rotationparameters(R::Matrix)
+function rotationparameters(R::AbstractMatrix)
     size(R, 1) == size(R, 2) || error("Matrix must be square")
     if size(R, 1) == 2
         return [atan(-R[1,2],R[1,1])]
@@ -154,20 +160,31 @@ function rotationparameters(R::Matrix)
     end
 end
 
-function rotation3(axis::Vector{T}, angle) where T
+"""
+    rotation3(axis, angle) -> AngleAxis
+    rotation3(axis) -> AngleAxis
+
+Construct a 3D rotation. Returns an `AngleAxis` rotation object (from Rotations.jl),
+not an `AffineMap`. Use `tformrotate` to get an `AffineMap`.
+
+The two-argument form uses `axis` (a 3-vector) and `angle` (in radians).
+The one-argument form treats `norm(axis)` as the angle and `axis/norm(axis)` as the axis
+(angle-axis representation where the angle is encoded in the magnitude).
+"""
+function rotation3(axis::AbstractVector{T}, angle) where T
     n = norm(axis)
     axisn = n>0 ? axis/n : (tmp = zeros(T,length(axis)); tmp[1] = 1; tmp)
     AngleAxis(angle, axisn...)
 end
 
-function rotation3(axis::Vector{T}) where T
+function rotation3(axis::AbstractVector{T}) where T
     n = norm(axis)
     axisn = n>0 ? axis/n : (tmp = zeros(typeof(one(T)/1),length(axis)); tmp[1] = 1; tmp)
     AngleAxis(n, axisn...)
 end
 
 
-function tformrotate(axis::Vector, angle)
+function tformrotate(axis::AbstractVector, angle)
     if length(axis) == 3
         return AffineMap(rotation3(axis, angle), zeros(eltype(axis),3))
     else
@@ -175,7 +192,7 @@ function tformrotate(axis::Vector, angle)
     end
 end
 
-function tformrotate(x::Vector)
+function tformrotate(x::AbstractVector)
     if length(x) == 3
         return AffineMap(rotation3(x), zeros(eltype(x),3))
     else

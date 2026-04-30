@@ -48,3 +48,22 @@ import Base: getindex
 
 Base.@deprecate_binding eachknot eachnode
 Base.@deprecate_binding knotgrid nodegrid
+
+# similarϕ → similar_deformation
+@deprecate similarϕ(ϕref, coefs) similar_deformation(ϕref, coefs)
+
+# medfilt → tmedfilt
+@deprecate medfilt(ϕs::AbstractVector{D}, n) where D<:AbstractDeformation tmedfilt(ϕs, n)
+
+# compose(f::Function, ϕ) where f ≠ identity — the signature now requires typeof(identity)
+function compose(f::Function, ϕ_new::GridDeformation{T,N}) where {T,N}
+    f == identity || error("Only the identity function is supported")
+    Base.depwarn("`compose(f, ϕ)` with a `Function` argument is deprecated; use `compose(identity, ϕ)` directly.", :compose)
+    compose(identity, ϕ_new)
+end
+
+# warp!(::Type{T}, dest, img, ϕs; ...) → warp!(dest, img, ϕs; eltype=T, ...)
+function warp!(::Type{T}, dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, img, ϕs; kwargs...) where T
+    Base.depwarn("`warp!(T, dest, img, ϕs)` is deprecated; use `warp!(dest, img, ϕs; eltype=T)` instead.", :warp!)
+    warp!(dest, img, ϕs; eltype=T, kwargs...)
+end

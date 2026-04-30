@@ -15,6 +15,7 @@ export
     # types
     AbstractDeformation,
     GridDeformation,
+    NodeIterator,
     WarpedArray,
     # functions
     arraysize,       # TODO: don't export?
@@ -27,12 +28,13 @@ export
     griddeformations,
     interpolate,
     interpolate!,
-    medfilt,
     nodegrid,
     regrid,
-    similarϕ,
+    similar_deformation,
     tform2deformation,
     tinterpolate,
+    tmedfilt,
+    tmedfilt!,
     translate,
     vecindex,        # TODO: don't export?
     vecgradient!,    # TODO: don't export?

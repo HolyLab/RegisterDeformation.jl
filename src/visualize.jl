@@ -49,7 +49,7 @@ that has the warped grid in magenta and the original grid in green.
 
 See also [`nodegrid`](@ref).
 """
-function warpgrid(ϕ; scale=1, showidentity::Bool=false)
+function warpgrid(ϕ::AbstractDeformation; scale=1, showidentity::Bool=false)
     img = nodegrid(ϕ)
     if scale != 1
         ϕ = GridDeformation(scale*ϕ.u, ϕ.nodes)

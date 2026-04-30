@@ -221,11 +221,11 @@ function vecindex(ϕ::GridDeformation{T,N,A}, x::SVector{N}) where {T,N,A<:Abstr
 end
 
 """
-    ϕ = similarϕ(ϕref, coefs)
+    ϕ = similar_deformation(ϕref, coefs)
 
 Create a deformation with the same nodes as `ϕref` but using `coefs` for the data.
-This is primarily useful for testing purposes, e.g., computing gradients with
-`ForwardDiff` where the elements are `ForwardDiff.Dual` numbers.
+This is primarily useful for computing gradients with `ForwardDiff` where the elements
+are `ForwardDiff.Dual` numbers.
 
 If `ϕref` is interpolating, `coefs` will be used for the interpolation coefficients,
 not the node displacements. Typically you want to create `ϕref` with
@@ -234,14 +234,14 @@ not the node displacements. Typically you want to create `ϕref` with
 
 rather than `interpolate(ϕ0)` (see [`interpolate!`](@ref)).
 """
-function similarϕ(ϕref, coefs::AbstractArray{<:Number})
+function similar_deformation(ϕref, coefs::AbstractArray{<:Number})
     coefsref = getcoefs(ϕref)
     N = ndims(coefsref)
     udata = convert_to_fixed(SVector{N,eltype(coefs)}, coefs, size(coefsref))
-    return similarϕ(ϕref, udata)
+    return similar_deformation(ϕref, udata)
 end
 
-similarϕ(ϕref, udata::AbstractArray{<:SVector}) = _similarϕ(ϕref, udata)
+similar_deformation(ϕref, udata::AbstractArray{<:SVector}) = _similarϕ(ϕref, udata)
 
 _similarϕ(ϕref::GridDeformation, udata) = GridDeformation(udata, ϕref.nodes)
 
@@ -395,7 +395,7 @@ function compose(ϕ_old::GridDeformation{T1,N,A}, ϕ_new::GridDeformation{T2,N})
         vecgradient!(gtmp, u, y)
         g[I] = hcat(ntuple(d->gtmp[d], Val(N))...) + eyeN
     end
-    GridDeformation(ucomp, nodes), g
+    (; ϕ=GridDeformation(ucomp, nodes), gradient=g)
 end
 
 """
@@ -406,20 +406,20 @@ e.g) `ϕsi_old = map(Interpolations.interpolate!, copy(ϕs_old))`
 function compose(ϕsi_old::AbstractVector{G1}, ϕs_new::AbstractVector{G2}) where {G1<:GridDeformation, G2<:GridDeformation}
     n = length(ϕs_new)
     length(ϕsi_old) == n || throw(DimensionMismatch("vectors-of-deformations must have the same length, got $(length(ϕsi_old)) and $n"))
-    ϕc1, g1 = compose(first(ϕsi_old), first(ϕs_new))
-    ϕs_c = Vector{typeof(ϕc1)}(undef, n)
-    gs = Vector{typeof(g1)}(undef, n)
-    ϕs_c[1], gs[1] = ϕc1, g1
+    r1 = compose(first(ϕsi_old), first(ϕs_new))
+    ϕs_c = Vector{typeof(r1.ϕ)}(undef, n)
+    gs = Vector{typeof(r1.gradient)}(undef, n)
+    ϕs_c[1], gs[1] = r1.ϕ, r1.gradient
     for i in 2:n
-        ϕs_c[i], gs[i] = compose(ϕsi_old[i], ϕs_new[i]);
+        ri = compose(ϕsi_old[i], ϕs_new[i])
+        ϕs_c[i], gs[i] = ri.ϕ, ri.gradient
     end
-    ϕs_c, gs
+    (; ϕ=ϕs_c, gradient=gs)
 end
 
 
-function compose(f::Function, ϕ_new::GridDeformation{T,N}) where {T,N}
-    f == identity || error("Only the identity function is supported")
-    ϕ_new, fill(similar_type(SArray, T, Size(N, N))(1.0I), size(ϕ_new.u))
+function compose(::typeof(identity), ϕ_new::GridDeformation{T,N}) where {T,N}
+    (; ϕ=ϕ_new, gradient=fill(similar_type(SArray, T, Size(N, N))(1.0I), size(ϕ_new.u)))
 end
 
 """

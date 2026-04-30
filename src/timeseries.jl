@@ -29,12 +29,15 @@ function tinterpolate(ϕsindex, tindex, nstack)
 end
 
 """
-    ϕs′ = medfilt(ϕs)
+    ϕs′ = tmedfilt(ϕs, n)
 
-Perform temporal median-filtering on a sequence of deformations. This is a form of smoothing
-that does not "round the corners" on sudden (but persistent) shifts.
+Perform temporal median-filtering on a sequence of deformations with window size `n`
+(which must be odd). This is a form of smoothing that does not "round the corners" on
+sudden (but persistent) shifts.
+
+See also [`tmedfilt!`](@ref).
 """
-function medfilt(ϕs::AbstractVector{D}, n) where D<:AbstractDeformation
+function tmedfilt(ϕs::AbstractVector{D}, n) where D<:AbstractDeformation
     nhalf = n>>1
     2nhalf+1 == n || error("filter size must be odd")
     T = eltype(eltype(D))
@@ -44,6 +47,23 @@ function medfilt(ϕs::AbstractVector{D}, n) where D<:AbstractDeformation
     ϕout = Vector{typeof(ϕ1)}(undef, length(ϕs))
     ϕout[1] = ϕ1
     _medfilt!(ϕout, ϕs, v, vs)  # function barrier due to instability of vs
+end
+
+"""
+    tmedfilt!(out, ϕs, n)
+
+In-place version of [`tmedfilt`](@ref). Writes the filtered deformations into the
+pre-allocated vector `out`, which must have the same length as `ϕs`.
+"""
+function tmedfilt!(out::AbstractVector, ϕs::AbstractVector{D}, n) where D<:AbstractDeformation
+    nhalf = n>>1
+    2nhalf+1 == n || error("filter size must be odd")
+    length(out) == length(ϕs) || throw(DimensionMismatch("out and ϕs must have the same length"))
+    T = eltype(eltype(D))
+    v = Array{T}(undef, ndims(D), n)
+    vs = ntuple(d->view(v, d, :), ndims(D))
+    out[1] = copy(ϕs[1])
+    _medfilt!(out, ϕs, v, vs)
 end
 
 @noinline function _medfilt!(ϕout, ϕs, v, vs::NTuple{N,T}) where {N,T}
