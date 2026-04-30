@@ -51,18 +51,20 @@ end
 
 """
 
-`warp!(T, io, img, ϕs; [nworkers=1])` writes warped images to
+`warp!(io, img, ϕs; [eltype=Float32, nworkers=1])` writes warped images to
 disk. `io` is an `IO` object or HDF5/JLD2 dataset (the latter must be
 pre-allocated using `d_create` to be of the proper size). `img` is an
 image sequence, and `ϕs` is a vector of deformations, one per image in
-`img`.  If `nworkers` is greater than one, it will spawn additional
+`img`.  `eltype` controls the element type written to disk.
+If `nworkers` is greater than one, it will spawn additional
 processes to perform the deformation.
 
-An alternative syntax is `warp!(T, io, img, uarray; [nworkers=1])`,
+An alternative syntax is `warp!(io, img, uarray; [eltype=Float32, nworkers=1])`,
 where `uarray` is an array of `u` values with `size(uarray)[end] ==
 nimages(img)`.
 """
-function warp!(::Type{T}, dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, img, ϕs; nworkers=1) where T
+function warp!(dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, img, ϕs; eltype::Type=Float32, nworkers=1)
+    T = eltype
     n = nimages(img)
     saxs = indices_spatial(img)
     ssz = map(length, saxs)
@@ -86,10 +88,11 @@ function warp!(::Type{T}, dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, img, ϕs; n
     nothing
 end
 
-warp!(::Type{T}, dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, img, u::AbstractArray{R}; kwargs...) where {T,R<:Real} = warp!(T, dest, img, Array(convert_to_fixed(u)); kwargs...)
+warp!(dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, img, u::AbstractArray{<:Real}; kwargs...) =
+    warp!(dest, img, Array(convert_to_fixed(u)); kwargs...)
 
 warp!(dest::Union{HDF5.Dataset,JLD2.JLDFile}, img, u; nworkers=1) =
-    warp!(eltype(dest), dest, img, u; nworkers=nworkers)
+    warp!(dest, img, u; eltype=Base.eltype(dest), nworkers)
 
 function _warp!(::Type{T}, dest, img, ϕs, nworkers) where T
     n = nimages(img)
@@ -155,7 +158,7 @@ of `A`.
 
 `NaN` is filled in for any missing pixels.
 """
-function translate(A::AbstractArray, displacement::DimsLike)
+function translate(A::AbstractArray, displacement::Union{AbstractVector{<:Integer}, Dims})
     disp = zeros(Int, ndims(A))
     disp[[coords_spatial(A)...]] = displacement
     indx = UnitRange{Int}[ axes(A, i) .+ disp[i] for i = 1:ndims(A) ]

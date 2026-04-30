@@ -112,12 +112,12 @@ end
     @test all(u[2,:,:] .== s[2])
 end
 
-@testset "similarϕ" begin
+@testset "similar_deformation" begin
     uref = reshape([1.5, -0.3, 0.8], 1, 3)
     nodes = (0:5:10,)
     ϕref = GridDeformation(uref, nodes)
     unew = [0.7, 0.4, -0.33]
-    ϕnew = similarϕ(ϕref, unew)
+    ϕnew = similar_deformation(ϕref, unew)
     ϕi = interpolate!(copy(ϕnew))
     @test ϕi.u(0)  ≈ SVector(0.7)
     @test ϕi.u(5)  ≈ SVector(0.4)
@@ -125,7 +125,7 @@ end
 
     ucoefs = copy(ϕi.u.itp.coefs)
     ϕiref = interpolate!(copy(ϕref))
-    ϕi = similarϕ(ϕiref, ucoefs)
+    ϕi = similar_deformation(ϕiref, ucoefs)
     @test ϕi.u(0)  ≈ SVector(0.7)
     @test ϕi.u(5)  ≈ SVector(0.4)
     @test ϕi.u(10) ≈ SVector(-0.33)
@@ -321,7 +321,7 @@ end
     # With Vector{GridDeformation}
     ϕs = tighten([GridDeformation(zeros(2,3,3), axes(o)) for i = 1:nimages(img)])
     open(fn, "w") do io
-        warp!(Float32, io, img, ϕs)
+        warp!(io, img, ϕs; eltype=Float32)
     end
     warped = open(fn, "r") do io
         read!(io, Array{Float32}(undef, size(img)))
@@ -330,7 +330,7 @@ end
     # With Array{SVector}
     uarray = reshape(reinterpret(SVector{2,Float64}, zeros(2,3,3,7)), (3,3,7))
     open(fn, "w") do io
-        warp!(Float32, io, img, uarray)
+        warp!(io, img, uarray; eltype=Float32)
     end
     warped = open(fn, "r") do io
         read!(io, Array{Float32}(undef, size(img)))
@@ -340,7 +340,7 @@ end
     uarray = zeros(2,3,3,7)
     fn = tempname()
     open(fn, "w") do io
-        warp!(Float32, io, img, uarray)
+        warp!(io, img, uarray; eltype=Float32)
     end
     warped = open(fn, "r") do io
         read!(io, Array{Float32}(undef, size(img)))
@@ -348,7 +348,7 @@ end
     @test warped == img
     # Multi-process
     open(fn, "w") do io
-        warp!(Float32, io, img, uarray; nworkers=3)
+        warp!(io, img, uarray; eltype=Float32, nworkers=3)
     end
     warped = open(fn, "r") do io
         read!(io, Array{Float32}(undef, size(img)))
@@ -397,11 +397,15 @@ end
 @testset "Median filtering" begin
     u = rand(2, 3, 3, 9)
     ϕs = griddeformations(u, (range(1, stop=10, length=3), range(1, stop=11, length=3)))
-    ϕsfilt = medfilt(ϕs, 3)
+    ϕsfilt = tmedfilt(ϕs, 3)
     v = ϕsfilt[3].u[2,2]
     v1 = median(vec(u[1,2,2,2:4]))
     v2 = median(vec(u[2,2,2,2:4]))
     @test v[1] == v1 && v[2] == v2
+    # in-place variant
+    ϕsfilt2 = similar(ϕsfilt)
+    tmedfilt!(ϕsfilt2, ϕs, 3)
+    @test ϕsfilt2[3].u[2,2] == v
 end
 
 @testset "Regridding" begin
