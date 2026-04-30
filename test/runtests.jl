@@ -6,6 +6,7 @@ using StaticArrays, LinearAlgebra, Distributed, Statistics
 using AxisArrays: AxisArray
 using OffsetArrays
 using Test
+using Aqua
 using RegisterDeformation.RegisterUtilities
 using JLD2, HDF5, FileIO
 using ImageFiltering
@@ -525,4 +526,10 @@ end
     A = reshape(1:9, 3, 3)
     At = transform(A, a)
     @test At[:, 1:2] == A[:, 2:3]
+end
+
+# warp!(dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, ...) extends ImageTransformations.warp!
+# without any RegisterDeformation-owned argument types — intentional piracy for batch I/O.
+@testset "Aqua" begin
+    Aqua.test_all(RegisterDeformation; piracies = (; broken = true))
 end

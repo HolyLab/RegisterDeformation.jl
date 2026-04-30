@@ -66,10 +66,10 @@ function tmedfilt!(out::AbstractVector, ϕs::AbstractVector{D}, n) where {D <: A
     return _medfilt!(out, ϕs, v, vs)
 end
 
-@noinline function _medfilt!(ϕout, ϕs, v, vs::NTuple{N, T}) where {N, T}
+@noinline function _medfilt!(ϕout, ϕs, v, vs::NTuple{N}) where {N}
     n = size(v, 2)
     nhalf = n >> 1
-    tmp = Vector{eltype(T)}(undef, N)
+    tmp = Vector{eltype(eltype(vs))}(undef, N)
     u1 = ϕout[1].u
     for i in (1 + nhalf):(length(ϕs) - nhalf)
         u = similar(u1)

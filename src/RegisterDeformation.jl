@@ -51,7 +51,6 @@ export
     transform!,
     transform
 
-const DimsLike = Union{Vector{Int}, Dims}
 const InterpExtrap = Union{AbstractInterpolation, AbstractExtrapolation}
 
 """
@@ -98,7 +97,5 @@ const Extrapolatable{T, N} = Union{TransformedArray{T, N}, AbstractExtrapolation
 include("warpedarray.jl")
 include("warp.jl")
 include("visualize.jl")
-
-include("deprecated.jl")
 
 end  # module

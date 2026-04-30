@@ -53,9 +53,10 @@ const InterpolatingDeformation{T, N, A <: AbstractInterpolation} = GridDeformati
 # With node ranges
 function GridDeformation(
         u::AbstractArray{FV, N},
-        nodes::NTuple{N, L}
-    ) where {FV <: SVector, N, L <: AbstractVector}
+        nodes::NTuple{N, <:AbstractVector}
+    ) where {FV <: SVector, N}
     T = eltype(FV)
+    L = eltype(typeof(nodes))
     length(FV) == N || throw(DimensionMismatch("$N-dimensional array requires SVector{$N,T}"))
     return GridDeformation{T, N, typeof(u), L}(u, nodes)
 end
@@ -63,8 +64,8 @@ end
 # With image axes
 function GridDeformation(
         u::AbstractArray{FV, N},
-        axs::NTuple{N, L}
-    ) where {FV <: SVector, N, L <: AbstractUnitRange{<:Integer}}
+        axs::NTuple{N, <:AbstractUnitRange{<:Integer}}
+    ) where {FV <: SVector, N}
     T = eltype(FV)
     length(FV) == N || throw(DimensionMismatch("$N-dimensional array requires SVector{$N,T}"))
     nodes = ntuple(N) do d
@@ -197,6 +198,14 @@ end
 
 Interpolations.interpolate(ϕ::InterpolatingDeformation, args...) = error("ϕ is already interpolating")
 Interpolations.interpolate!(ϕ::InterpolatingDeformation, args...) = error("ϕ is already interpolating")
+# Disambiguate with Interpolations.interpolate!(A, it::IT, gt::GT)
+function Interpolations.interpolate!(
+        ϕ::InterpolatingDeformation,
+        it::Union{NoInterp, Tuple{Vararg{Union{NoInterp, BSpline}}}, BSpline},
+        gt::Union{NoInterp, Tuple{Vararg{Union{NoInterp, Interpolations.GridType}}}, Interpolations.GridType},
+    )
+    error("ϕ is already interpolating")
+end
 
 """
     ϕi = extrapolate!(ϕ, BC=InPlace(OnCell()))
