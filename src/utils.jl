@@ -10,45 +10,45 @@ centeraxes(axs) = map(centeraxis, axs)
 function centeraxis(ax)
     f, l = first(ax), last(ax)
     n = l - f + 1
-    nhalf = (n+1) ÷ 2
-    return 1-nhalf:n-nhalf
+    nhalf = (n + 1) ÷ 2
+    return (1 - nhalf):(n - nhalf)
 end
 
-function extract1(u::AbstractArray{V}, N, ssz) where V<:SVector
-    if ndims(u) == N+1
-        ϕ = GridDeformation(reshape(u, size(u)[1:end-1]), ssz)
+function extract1(u::AbstractArray{V}, N, ssz) where {V <: SVector}
+    if ndims(u) == N + 1
+        ϕ = GridDeformation(reshape(u, size(u)[1:(end - 1)]), ssz)
     else
         ϕ = GridDeformation(u, ssz)
     end
-    ϕ
+    return ϕ
 end
-extract1(ϕs::Vector{D}, N, ssz) where {D<:AbstractDeformation} = ϕs[1]
+extract1(ϕs::Vector{D}, N, ssz) where {D <: AbstractDeformation} = ϕs[1]
 
-function extracti(u::AbstractArray{V}, i, ssz) where V<:SVector
-    colons = [Colon() for d = 1:ndims(u)-1]
-    GridDeformation(u[colons..., i], ssz)
+function extracti(u::AbstractArray{V}, i, ssz) where {V <: SVector}
+    colons = [Colon() for d in 1:(ndims(u) - 1)]
+    return GridDeformation(u[colons..., i], ssz)
 end
-extracti(ϕs::Vector{D}, i, _) where {D<:AbstractDeformation} = ϕs[i]
+extracti(ϕs::Vector{D}, i, _) where {D <: AbstractDeformation} = ϕs[i]
 
-function checkϕdims(u::AbstractArray{V}, N, n) where V<:SVector
-    ndims(u) == N+1 || error("u's dimensionality $(ndims(u)) is inconsistent with the number of spatial dimensions $N of the image")
+function checkϕdims(u::AbstractArray{V}, N, n) where {V <: SVector}
+    ndims(u) == N + 1 || error("u's dimensionality $(ndims(u)) is inconsistent with the number of spatial dimensions $N of the image")
     if size(u)[end] != n
         error("Must have one `u` slice per image")
     end
-    nothing
+    return nothing
 end
-checkϕdims(ϕs::Vector{D}, N, n) where {D<:AbstractDeformation} = length(ϕs) == n || error("Must have one `ϕ` per image")
+checkϕdims(ϕs::Vector{D}, N, n) where {D <: AbstractDeformation} = length(ϕs) == n || error("Must have one `ϕ` per image")
 
 
 # TODO?: do we need to return real values beyond-the-edge for a SubArray?
 
-floattype(::Type{T}) where T<:AbstractFloat = T
+floattype(::Type{T}) where {T <: AbstractFloat} = T
 floattype(::Type{<:Integer}) = Float64
-floattype(::Type{SVector{N,T}}) where {N,T} = floattype(T)
+floattype(::Type{SVector{N, T}}) where {N, T} = floattype(T)
 
-nanvalue(::Type{T}) where T<:Real = convert(promote_type(T, Float32), NaN)
-nanvalue(::Type{C}) where C<:AbstractGray = Gray(nanvalue(eltype(C)))
-nanvalue(::Type{C}) where C<:AbstractRGB  = (x = nanvalue(eltype(C)); RGB(x, x, x))
+nanvalue(::Type{T}) where {T <: Real} = convert(promote_type(T, Float32), NaN)
+nanvalue(::Type{C}) where {C <: AbstractGray} = Gray(nanvalue(eltype(C)))
+nanvalue(::Type{C}) where {C <: AbstractRGB} = (x = nanvalue(eltype(C)); RGB(x, x, x))
 
 to_etp(img) = extrapolate(interpolate(img, BSpline(Linear())), nanvalue(eltype(img)))
 
@@ -64,66 +64,66 @@ getcoefs(itp::Interpolations.BSplineInterpolation) = itp.coefs
 getcoefs(u::AbstractArray{<:SVector}) = u
 
 # Extensions to Interpolations and StaticArrays
-@generated function vecindex(A::AbstractArray, x::SVector{N}) where N
-    args = [:(x[$d]) for d = 1:N]
+@generated function vecindex(A::AbstractArray, x::SVector{N}) where {N}
+    args = [:(x[$d]) for d in 1:N]
     meta = Expr(:meta, :inline)
-    quote
+    return quote
         $meta
         getindex(A, $(args...))
     end
 end
 
-@generated function vecindex(A::AbstractInterpolation, x::SVector{N}) where N
-    args = [:(x[$d]) for d = 1:N]
+@generated function vecindex(A::AbstractInterpolation, x::SVector{N}) where {N}
+    args = [:(x[$d]) for d in 1:N]
     meta = Expr(:meta, :inline)
-    quote
+    return quote
         $meta
         A($(args...))
     end
 end
 
-@generated function vecgradient!(g, itp::AbstractArray, x::SVector{N}) where N
-    args = [:(x[$d]) for d = 1:N]
+@generated function vecgradient!(g, itp::AbstractArray, x::SVector{N}) where {N}
+    args = [:(x[$d]) for d in 1:N]
     meta = Expr(:meta, :inline)
-    quote
+    return quote
         $meta
         Interpolations.gradient!(g, itp, $(args...))
     end
 end
 
-function convert_to_fixed(u::Array{T}, sz=size(u)) where T
+function convert_to_fixed(u::Array{T}, sz = size(u)) where {T}
     N = sz[1]
-    convert_to_fixed(SVector{N, T}, u, tail(sz))
+    return convert_to_fixed(SVector{N, T}, u, tail(sz))
 end
 
 # Unlike the one above, this is type-stable
-function convert_to_fixed(::Type{SVector{N,T}}, u::AbstractArray{T}, sz=tail(size(u))) where {T,N}
-    reshape(reinterpret(SVector{N,T}, vec(u)), sz)
+function convert_to_fixed(::Type{SVector{N, T}}, u::AbstractArray{T}, sz = tail(size(u))) where {T, N}
+    return reshape(reinterpret(SVector{N, T}, vec(u)), sz)
 end
 
-@generated function copy_ctf!(dest::Array{SVector{N,T}}, src::Array) where {N,T}
-    exvec = [:(src[offset+$d]) for d=1:N]
-    quote
-        for i = 1:length(dest)
-            offset = (i-1)*N
+@generated function copy_ctf!(dest::Array{SVector{N, T}}, src::Array) where {N, T}
+    exvec = [:(src[offset + $d]) for d in 1:N]
+    return quote
+        for i in 1:length(dest)
+            offset = (i - 1) * N
             dest[i] = SVector($(exvec...))
         end
         dest
     end
 end
 
-function convert_from_fixed(uf::AbstractArray{SVector{N,T}}, sz=size(uf)) where {N,T}
+function convert_from_fixed(uf::AbstractArray{SVector{N, T}}, sz = size(uf)) where {N, T}
     if isbitstype(T) && isa(uf, Array)
         u = reshape(reinterpret(T, vec(uf)), (N, sz...))
     else
         u = Array{T}(undef, N, sz...)
-        for i = 1:length(uf)
-            for d = 1:N
-                u[d,i] = uf[i][d]
+        for i in 1:length(uf)
+            for d in 1:N
+                u[d, i] = uf[i][d]
             end
         end
     end
-    u
+    return u
 end
 
 # # Note this is a bit unsafe as it requires the user to specify C correctly
@@ -133,8 +133,8 @@ end
 # end
 
 # Wrapping functions to interface with CoordinateTransfromations instead of AffineTransfroms module
-tformeye(m::Int) = AffineMap(Matrix{Float64}(I,m,m), zeros(m))
-tformtranslate(trans::AbstractVector) = (m = length(trans); AffineMap(Matrix{Float64}(I,m,m), trans))
+tformeye(m::Int) = AffineMap(Matrix{Float64}(I, m, m), zeros(m))
+tformtranslate(trans::AbstractVector) = (m = length(trans); AffineMap(Matrix{Float64}(I, m, m), trans))
 
 """
     rotation2(angle) -> RotMatrix
@@ -145,16 +145,16 @@ Construct a 2D rotation matrix from `angle` (in radians). Returns a `RotMatrix`
 rotation2(angle) = RotMatrix(angle)
 function tformrotate(angle)
     A = RotMatrix(angle)
-    AffineMap(A, zeros(eltype(A),2))
+    return AffineMap(A, zeros(eltype(A), 2))
 end
 
 function rotationparameters(R::AbstractMatrix)
     size(R, 1) == size(R, 2) || error("Matrix must be square")
     if size(R, 1) == 2
-        return [atan(-R[1,2],R[1,1])]
+        return [atan(-R[1, 2], R[1, 1])]
     elseif size(R, 1) == 3
         aa = AngleAxis(R)
-        return rotation_angle(aa)*rotation_axis(aa)
+        return rotation_angle(aa) * rotation_axis(aa)
     else
         error("Rotations in $(size(R, 1)) dimensions not supported")
     end
@@ -171,22 +171,22 @@ The two-argument form uses `axis` (a 3-vector) and `angle` (in radians).
 The one-argument form treats `norm(axis)` as the angle and `axis/norm(axis)` as the axis
 (angle-axis representation where the angle is encoded in the magnitude).
 """
-function rotation3(axis::AbstractVector{T}, angle) where T
+function rotation3(axis::AbstractVector{T}, angle) where {T}
     n = norm(axis)
-    axisn = n>0 ? axis/n : (tmp = zeros(T,length(axis)); tmp[1] = 1; tmp)
-    AngleAxis(angle, axisn...)
+    axisn = n > 0 ? axis / n : (tmp = zeros(T, length(axis)); tmp[1] = 1; tmp)
+    return AngleAxis(angle, axisn...)
 end
 
-function rotation3(axis::AbstractVector{T}) where T
+function rotation3(axis::AbstractVector{T}) where {T}
     n = norm(axis)
-    axisn = n>0 ? axis/n : (tmp = zeros(typeof(one(T)/1),length(axis)); tmp[1] = 1; tmp)
-    AngleAxis(n, axisn...)
+    axisn = n > 0 ? axis / n : (tmp = zeros(typeof(one(T) / 1), length(axis)); tmp[1] = 1; tmp)
+    return AngleAxis(n, axisn...)
 end
 
 
 function tformrotate(axis::AbstractVector, angle)
     if length(axis) == 3
-        return AffineMap(rotation3(axis, angle), zeros(eltype(axis),3))
+        return AffineMap(rotation3(axis, angle), zeros(eltype(axis), 3))
     else
         error("Dimensionality ", length(axis), " not supported")
     end
@@ -194,7 +194,7 @@ end
 
 function tformrotate(x::AbstractVector)
     if length(x) == 3
-        return AffineMap(rotation3(x), zeros(eltype(x),3))
+        return AffineMap(rotation3(x), zeros(eltype(x), 3))
     else
         error("Dimensionality ", length(x), " not supported")
     end

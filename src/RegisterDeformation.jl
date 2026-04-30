@@ -18,7 +18,7 @@ export
     NodeIterator,
     WarpedArray,
     # functions
-    arraysize,       # TODO: don't export?
+    arraysize, # TODO: don't export?
     centeraxes,
     compose,
     eachnode,
@@ -36,8 +36,8 @@ export
     tmedfilt,
     tmedfilt!,
     translate,
-    vecindex,        # TODO: don't export?
-    vecgradient!,    # TODO: don't export?
+    vecindex, # TODO: don't export?
+    vecgradient!, # TODO: don't export?
     warp,
     warp!,
     warpgrid,
@@ -52,7 +52,7 @@ export
     transform
 
 const DimsLike = Union{Vector{Int}, Dims}
-const InterpExtrap = Union{AbstractInterpolation,AbstractExtrapolation}
+const InterpExtrap = Union{AbstractInterpolation, AbstractExtrapolation}
 
 """
 # RegisterDeformation
@@ -82,11 +82,11 @@ The major functions/types exported by RegisterDeformation are:
 """
 RegisterDeformation
 
-abstract type AbstractDeformation{T,N} end
-Base.eltype(::Type{AbstractDeformation{T,N}}) where {T,N} = T
-Base.ndims(::Type{AbstractDeformation{T,N}}) where {T,N} = N
-Base.eltype(::Type{D}) where {D<:AbstractDeformation} = eltype(supertype(D))
-Base.ndims(::Type{D}) where {D<:AbstractDeformation} = ndims(supertype(D))
+abstract type AbstractDeformation{T, N} end
+Base.eltype(::Type{AbstractDeformation{T, N}}) where {T, N} = T
+Base.ndims(::Type{AbstractDeformation{T, N}}) where {T, N} = N
+Base.eltype(::Type{D}) where {D <: AbstractDeformation} = eltype(supertype(D))
+Base.ndims(::Type{D}) where {D <: AbstractDeformation} = ndims(supertype(D))
 Base.eltype(d::AbstractDeformation) = eltype(typeof(d))
 Base.ndims(d::AbstractDeformation) = ndims(typeof(d))
 
@@ -94,7 +94,7 @@ include("griddeformation.jl")
 include("utils.jl")
 include("timeseries.jl")
 include("tformedarrays.jl")
-const Extrapolatable{T,N} = Union{TransformedArray{T,N},AbstractExtrapolation{T,N}}
+const Extrapolatable{T, N} = Union{TransformedArray{T, N}, AbstractExtrapolation{T, N}}
 include("warpedarray.jl")
 include("warp.jl")
 include("visualize.jl")

@@ -10,41 +10,45 @@
     error("field ", name, " is not available")
 end
 
-function GridDeformation(u::AbstractArray{FV,N},
-                         sz::NTuple{N,L}) where {FV<:SVector,N,L<:Integer}
+function GridDeformation(
+        u::AbstractArray{FV, N},
+        sz::NTuple{N, L}
+    ) where {FV <: SVector, N, L <: Integer}
     Base.depwarn("`GridDeformation(u, size(fixed))` is deprecated, use `GridDeformation(u, axes(fixed))` instead.", :GridDeformation)
     return GridDeformation(u, map(Base.OneTo, sz))
 end
 
 # The above causes an ambiguity, resolve it
-function GridDeformation(u::AbstractArray{FV,0}, nodes::Tuple{}) where FV<:SVector
+function GridDeformation(u::AbstractArray{FV, 0}, nodes::Tuple{}) where {FV <: SVector}
     error("node tuple cannot be empty")
 end
 
 function GridDeformation(u, nodes::AbstractVector{<:Integer})
     Base.depwarn("`GridDeformation(u, [size(fixed)...])` is deprecated, pass the axes of `fixed` instead.", :GridDeformation)
-    GridDeformation(u, map(Base.OneTo, (nodes...,)))
+    return GridDeformation(u, map(Base.OneTo, (nodes...,)))
 end
 
-function tform2deformation(tform::AffineMap{M,V}, arraysize::DimsLike, gridsize) where {M,V}
-    Base.depwarn("""
-    `tform2deformation(tform, arraysize, gridsize)` is deprecated.
-    Formerly, `tform` was defined so as to apply to `centered(img)`, which shifts
-    the axes of `img` to put 0 at the midpoint of `img`.
-    Now you should call this as `tform2deformation(tform, axs, gridsize)`, where
-    `axs` represents the desired domain of `tform`.
-    If you are transitioning old code, either use `axs = axes(fixed)` if `fixed`
-    is already centered, or `axs = centeraxes(axes(fixed))` if not.
-    """, :tform2deformation)
+function tform2deformation(tform::AffineMap{M, V}, arraysize::DimsLike, gridsize) where {M, V}
+    Base.depwarn(
+        """
+        `tform2deformation(tform, arraysize, gridsize)` is deprecated.
+        Formerly, `tform` was defined so as to apply to `centered(img)`, which shifts
+        the axes of `img` to put 0 at the midpoint of `img`.
+        Now you should call this as `tform2deformation(tform, axs, gridsize)`, where
+        `axs` represents the desired domain of `tform`.
+        If you are transitioning old code, either use `axs = axes(fixed)` if `fixed`
+        is already centered, or `axs = centeraxes(axes(fixed))` if not.
+        """, :tform2deformation
+    )
     axs = map((arraysize...,)) do sz
         halfsz = sz ÷ 2
-        IdentityUnitRange(1-halfsz:sz-halfsz)
+        IdentityUnitRange((1 - halfsz):(sz - halfsz))
     end
     return tform2deformation(tform, axs, (gridsize...,))
 end
 
 import Base: getindex
-@deprecate getindex(ϕ::GridDeformation{T,N,A}, xs::Vararg{Number,N}) where {T,N,A<:AbstractInterpolation} ϕ(xs...)
+@deprecate getindex(ϕ::GridDeformation{T, N, A}, xs::Vararg{Number, N}) where {T, N, A <: AbstractInterpolation} ϕ(xs...)
 
 Base.@deprecate_binding eachknot eachnode
 Base.@deprecate_binding knotgrid nodegrid
@@ -53,17 +57,17 @@ Base.@deprecate_binding knotgrid nodegrid
 @deprecate similarϕ(ϕref, coefs) similar_deformation(ϕref, coefs)
 
 # medfilt → tmedfilt
-@deprecate medfilt(ϕs::AbstractVector{D}, n) where D<:AbstractDeformation tmedfilt(ϕs, n)
+@deprecate medfilt(ϕs::AbstractVector{D}, n) where {D <: AbstractDeformation} tmedfilt(ϕs, n)
 
 # compose(f::Function, ϕ) where f ≠ identity — the signature now requires typeof(identity)
-function compose(f::Function, ϕ_new::GridDeformation{T,N}) where {T,N}
+function compose(f::Function, ϕ_new::GridDeformation{T, N}) where {T, N}
     f == identity || error("Only the identity function is supported")
     Base.depwarn("`compose(f, ϕ)` with a `Function` argument is deprecated; use `compose(identity, ϕ)` directly.", :compose)
-    compose(identity, ϕ_new)
+    return compose(identity, ϕ_new)
 end
 
 # warp!(::Type{T}, dest, img, ϕs; ...) → warp!(dest, img, ϕs; eltype=T, ...)
-function warp!(::Type{T}, dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, img, ϕs; kwargs...) where T
+function warp!(::Type{T}, dest::Union{IO, HDF5.Dataset, JLD2.JLDFile}, img, ϕs; kwargs...) where {T}
     Base.depwarn("`warp!(T, dest, img, ϕs)` is deprecated; use `warp!(dest, img, ϕs; eltype=T)` instead.", :warp!)
-    warp!(dest, img, ϕs; eltype=T, kwargs...)
+    return warp!(dest, img, ϕs; eltype = T, kwargs...)
 end
