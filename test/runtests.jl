@@ -7,6 +7,7 @@ using AxisArrays: AxisArray
 using OffsetArrays
 using Test
 using Aqua
+using ExplicitImports
 using RegisterDeformation.RegisterUtilities
 using JLD2, HDF5, FileIO
 using ImageFiltering
@@ -533,3 +534,11 @@ end
 @testset "Aqua" begin
     Aqua.test_all(RegisterDeformation; piracies = (; broken = true))
 end
+
+# warp! is intentionally extended from ImageTransformations (not declared public there);
+# BSplineInterpolation, FilledExtrapolation, GridType, gradient! from Interpolations and
+# Dataset/JLDFile from HDF5/JLD2 are internal types with no public equivalents.
+test_explicit_imports(RegisterDeformation;
+    all_explicit_imports_are_public = false,
+    all_qualified_accesses_are_public = false,
+)

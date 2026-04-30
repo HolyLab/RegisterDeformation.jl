@@ -1,15 +1,27 @@
 module RegisterDeformation
 
-using ImageCore, ImageAxes, Interpolations, StaticArrays, HDF5, JLD2, ProgressMeter
-using RegisterUtilities, LinearAlgebra, Rotations, Base.Cartesian
-using Distributed, Statistics, SharedArrays
-using Base: tail
-using Interpolations: AbstractInterpolation, AbstractExtrapolation
-import ImageTransformations: warp, warp!
-# to avoid `scale` conflict with Interpolations, selectively import CoordinateTransformations:
-using CoordinateTransformations: AffineMap
+using CoordinateTransformations: CoordinateTransformations, AffineMap
+using Distributed: Distributed, RemoteChannel, addprocs, myid, nworkers, remotecall_fetch
+using HDF5: HDF5
+using ImageAxes: ImageAxes, AbstractGray, AbstractRGB, Colorant, Gray, RGB,
+    base_colorant_type, coords_spatial, data, getindex!, indices_spatial, nimages, sdims,
+    timeaxis
+using Interpolations: Interpolations, AbstractExtrapolation, AbstractInterpolation, BSpline,
+    Flat, InPlace, Line, Linear, NoInterp, OnCell, Quadratic, ScaledInterpolation,
+    eachvalue, extrapolate, interpolate, interpolate!, scale
+using JLD2: JLD2
+using LinearAlgebra: LinearAlgebra, I, norm
+using ProgressMeter: ProgressMeter, Progress, finish!, update!, @showprogress
+using RegisterUtilities: RegisterUtilities
+using Requires: Requires, @require
+using Rotations: Rotations, AngleAxis, RotMatrix, rotation_angle, rotation_axis
+using SharedArrays: SharedArrays, SharedArray
+using StaticArrays: StaticArrays, SArray, SVector, Size, similar_type
+using Statistics: Statistics, median!
 import CoordinateTransformations: compose
-using OffsetArrays: IdentityUnitRange   # for Julia-version compatibility
+import ImageTransformations: warp, warp!
+using Base: tail
+using Base.Cartesian
 
 export
     # types

@@ -104,7 +104,7 @@ function Base.show(io::IO, ϕ::GridDeformation{T}) where {T}
     if ϕ.u isa AbstractInterpolation
         print(io, "Interpolating ")
     end
-    print(io, Base.dims2string(size(ϕ.u)), " GridDeformation{", T, "} over a domain ")
+    print(io, join(size(ϕ.u), "×"), " GridDeformation{", T, "} over a domain ")
     for (i, n) in enumerate(ϕ.nodes)
         print(io, first(n), "..", last(n))
         i < length(ϕ.nodes) && print(io, '×')
