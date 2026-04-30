@@ -17,17 +17,17 @@ Optionally specify the element type `T` of `img`.
 
 See also [`warpgrid`](@ref).
 """
-function nodegrid(::Type{T}, nodes::NTuple{N,AbstractRange}) where {T,N}
-    @assert all(r->first(r)==1, nodes)
-    inds = map(r->Base.OneTo(ceil(Int, last(r))), nodes)
+function nodegrid(::Type{T}, nodes::NTuple{N, AbstractRange}) where {T, N}
+    @assert all(r -> first(r) == 1, nodes)
+    inds = map(r -> Base.OneTo(ceil(Int, last(r))), nodes)
     img = Array{T}(undef, map(length, inds))
     fill!(img, zero(T))
-    for idim = 1:N
+    for idim in 1:N
         indexes = Any[inds...]
-        indexes[idim] = map(x->clamp(round(Int, x), first(inds[idim])+1, last(inds[idim])-1), nodes[idim])
+        indexes[idim] = map(x -> clamp(round(Int, x), first(inds[idim]) + 1, last(inds[idim]) - 1), nodes[idim])
         img[indexes...] .= one(T)
     end
-    img
+    return img
 end
 nodegrid(::Type{T}, ϕ::GridDeformation) where {T} = nodegrid(T, ϕ.nodes)
 nodegrid(arg) = nodegrid(Bool, arg)
@@ -49,15 +49,15 @@ that has the warped grid in magenta and the original grid in green.
 
 See also [`nodegrid`](@ref).
 """
-function warpgrid(ϕ::AbstractDeformation; scale=1, showidentity::Bool=false)
+function warpgrid(ϕ::AbstractDeformation; scale = 1, showidentity::Bool = false)
     img = nodegrid(ϕ)
     if scale != 1
-        ϕ = GridDeformation(scale*ϕ.u, ϕ.nodes)
+        ϕ = GridDeformation(scale * ϕ.u, ϕ.nodes)
     end
     wimg = warp(img, ϕ)
     if showidentity
-        n = ndims(img)+1
-        return reshape(reinterpret(RGB{Float32}, permutedims(cat(wimg, img, wimg, dims=n), (n,1:ndims(img)...))),(size(img)...,))
+        n = ndims(img) + 1
+        return reshape(reinterpret(RGB{Float32}, permutedims(cat(wimg, img, wimg, dims = n), (n, 1:ndims(img)...))), (size(img)...,))
     end
-    wimg
+    return wimg
 end
