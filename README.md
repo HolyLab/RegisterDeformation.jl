@@ -1,6 +1,7 @@
 # RegisterDeformation
 
 [![Build Status](https://travis-ci.com/HolyLab/RegisterDeformation.jl.svg?branch=master)](https://travis-ci.com/HolyLab/RegisterDeformation.jl)
+[![Aqua QA](https://juliatesting.github.io/Aqua.jl/dev/assets/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 
 This package implements deformations (a.k.a., diffeomorphisms) for warping space.
 

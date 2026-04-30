@@ -93,6 +93,55 @@ warp!(dest::Union{IO, HDF5.Dataset, JLD2.JLDFile}, img, u::AbstractArray{<:Real}
 warp!(dest::Union{HDF5.Dataset, JLD2.JLDFile}, img, u; nworkers = 1) =
     warp!(dest, img, u; eltype = Base.eltype(dest), nworkers)
 
+# Disambiguate with HDF5/JLD2 dest + AbstractArray{<:Real} u (fixes ambiguity between the two methods above)
+warp!(dest::Union{HDF5.Dataset, JLD2.JLDFile}, img, u::AbstractArray{<:Real}; nworkers = 1) =
+    warp!(dest, img, Array(convert_to_fixed(u)); eltype = Base.eltype(dest), nworkers)
+
+# Disambiguate with ImageTransformations.warp(::AbstractExtrapolation, tform)
+function warp(img::Interpolations.AbstractExtrapolation, ϕ::AbstractDeformation)
+    wimg = WarpedArray(img, ϕ)
+    dest = similar(parent(img), warp_type(img))
+    return warp!(dest, wimg)
+end
+
+# Disambiguate with ImageTransformations.warp!(out, ::AbstractExtrapolation, tform)
+function warp!(dest::AbstractArray, img::Interpolations.AbstractExtrapolation, ϕ::AbstractDeformation)
+    wimg = WarpedArray(img, ϕ)
+    return warp!(dest, wimg)
+end
+
+# Disambiguate AbstractExtrapolation img with IO/HDF5/JLD2 dest variants
+warp!(dest::Union{HDF5.Dataset, JLD2.JLDFile}, img::Interpolations.AbstractExtrapolation, u; nworkers = 1) =
+    warp!(dest, img, u; eltype = Base.eltype(dest), nworkers)
+
+warp!(dest::Union{HDF5.Dataset, JLD2.JLDFile}, img::Interpolations.AbstractExtrapolation, u::AbstractArray{<:Real}; nworkers = 1) =
+    warp!(dest, img, Array(convert_to_fixed(u)); eltype = Base.eltype(dest), nworkers)
+
+function warp!(
+        dest::Union{IO, HDF5.Dataset, JLD2.JLDFile},
+        img::Interpolations.AbstractExtrapolation,
+        ϕs;
+        eltype::Type = Float32,
+        nworkers = 1,
+    )
+    return invoke(
+        warp!,
+        Tuple{Union{IO, HDF5.Dataset, JLD2.JLDFile}, Any, Any},
+        dest,
+        img,
+        ϕs;
+        eltype,
+        nworkers,
+    )
+end
+
+warp!(
+    dest::Union{IO, HDF5.Dataset, JLD2.JLDFile},
+    img::Interpolations.AbstractExtrapolation,
+    u::AbstractArray{<:Real};
+    kwargs...,
+) = warp!(dest, img, Array(convert_to_fixed(u)); kwargs...)
+
 function _warp!(::Type{T}, dest, img, ϕs, nworkers) where {T}
     n = nimages(img)
     saxs = indices_spatial(img)
