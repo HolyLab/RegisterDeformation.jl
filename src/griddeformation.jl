@@ -1,34 +1,29 @@
 """
-`ϕ = GridDeformation(u::Array{<:SVector}, axs)` creates a
-deformation `ϕ` for an array with axes `axs`.  `u` specifies the
-"pixel-wise" displacement at a series of nodes that are
-evenly-spaced over the domain specified by `axs` (i.e., using
-node-vectors `range(first(axs[d]), stop=last(axs[d]), length=size(u,d))`).
-In particular, each corner of the array is the site of one node.
+    GridDeformation(u::AbstractArray{<:SVector}, axs) -> GridDeformation
+    GridDeformation(u::AbstractArray{<:SVector}, nodes) -> GridDeformation
+    GridDeformation(u::AbstractArray{<:Real}, nodes) -> GridDeformation
+    GridDeformation((u1, u2, ...), nodes) -> GridDeformation
 
-`ϕ = GridDeformation(u::Array{<:SVector}, nodes)` specifies the
-node-vectors manually. `u` must have dimensions equal to
-`(length(nodes[1]), length(nodes[2]), ...)`.
+Create an `N`-dimensional deformation on a regular grid.
 
-`ϕ = GridDeformation(u::Array{T<:Real}, ...)` constructs the
-deformation from a "plain" `u` array. For a deformation in `N` dimensions,
-`u` must have `N+1` dimensions, where the first dimension corresponds
-to the displacement along each axis (and therefore `size(u,1) == N`).
+In the first form, nodes are evenly-spaced over the domain given by `axs` (a tuple
+of unit ranges, one per dimension), placing one node at each corner. In the second
+form, `nodes` is a tuple of vectors that specify node positions explicitly; `u` must
+have size `(length(nodes[1]), length(nodes[2]), ...)`.
 
-Finally, `ϕ = GridDeformation((u1, u2, ...), ...)` allows you to
-construct the deformation using an `N`-tuple of shift-arrays, each
-with `N` dimensions.
+In the third form, `u` is a "plain" `Real` array with `N+1` dimensions, where
+`size(u, 1) == N` indexes the displacement component along each axis. In the fourth
+form, an `N`-tuple of `N`-dimensional shift arrays is accepted instead.
 
 # Example
 
-To represent a two-dimensional deformation over a spatial region `1:100 × 1:200`
-(e.g., for an image of that size),
+To represent a 2D deformation over a `1:100 × 1:200` image domain:
 
 ```julia
 gridsize = (3, 5)             # a coarse grid
-u = 10*randn(2, gridsize...)  # each displacement is 2-dimensional, typically ~10 pixels
+u = 10*randn(2, gridsize...)  # 2D displacements, ~10 pixels each
 nodes = (range(1, stop=100, length=gridsize[1]), range(1, stop=200, length=gridsize[2]))
-ϕ = GridDeformation(u, nodes) # this is a "naive" deformation (not ready for interpolation)
+ϕ = GridDeformation(u, nodes) # "naive" deformation (not yet ready for interpolation)
 ```
 """
 struct GridDeformation{T, N, A <: AbstractArray, L} <: AbstractDeformation{T, N}
@@ -406,16 +401,20 @@ end
 regrid(ϕ::GridDeformation{T, N}, sz::Dims{N}) where {T, N} = regrid(interpolate(ϕ), sz)
 
 """
-`ϕ_c = ϕ_old(ϕ_new)` computes the composition of two deformations,
-yielding a deformation for which `ϕ_c(x) ≈ ϕ_old(ϕ_new(x))`. `ϕ_old`
-must be interpolating (see `interpolate(ϕ_old)`).
+    ϕ_old ∘ ϕ_new       -> @NamedTuple{ϕ::GridDeformation, gradient}
+    ϕ_old(ϕ_new)         -> GridDeformation
+    compose(ϕ_old, ϕ_new) -> @NamedTuple{ϕ::GridDeformation, gradient}
 
-`ϕ_c, g = compose(ϕ_old, ϕ_new)` also yields the gradient `g` of `ϕ_c`
-with respect to `u_new`.  `g[i,j,...]` is the Jacobian matrix at grid
-position `(i,j,...)`.
+Compute the composition of two deformations, yielding `ϕ_c` such that
+`ϕ_c(x) ≈ ϕ_old(ϕ_new(x))`. `ϕ_old` must be interpolating
+(see [`interpolate`](@ref)).
 
-You can use `_, g = compose(identity, ϕ_new)` if you need the gradient
-for when `ϕ_old` is equal to the identity transformation.
+The functor form `ϕ_old(ϕ_new)` returns only the composed `GridDeformation`.
+The `∘` / `compose` form returns a named tuple `(; ϕ, gradient)` where
+`gradient[i,j,...]` is the Jacobian matrix of `ϕ_c` with respect to `u_new`
+at grid position `(i,j,...)`. The result can be destructured as `ϕ_c, g = compose(...)`.
+
+Use `compose(identity, ϕ_new)` when `ϕ_old` is the identity transformation.
 """
 function compose(ϕ_old::GridDeformation{T1, N, A}, ϕ_new::GridDeformation{T2, N}) where {T1, T2, N, A <: AbstractInterpolation}
     u, nodes = ϕ_old.u, ϕ_old.nodes
