@@ -8,5 +8,5 @@ DONE: add ExplicitImports.jl
 DONE: limit struct mutability
 DONE: improve test coverage
 DONE: add and improve docstrings
-TODO: add or improve documentation
+DONE: add or improve documentation
 
