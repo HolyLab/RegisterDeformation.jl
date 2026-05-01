@@ -1,13 +1,21 @@
 # API summary
 
+## Types
+
+```@docs
+AbstractDeformation
+GridDeformation
+NodeIterator
+WarpedArray
+```
+
 ## Creating deformations
 
 ```@docs
-GridDeformation
 tform2deformation
 griddeformations
 regrid
-similarϕ
+similar_deformation
 ```
 
 ## Conversion to interpolating form
@@ -22,7 +30,6 @@ extrapolate!(::GridDeformation)
 ## Warping images
 
 ```@docs
-WarpedArray
 warp
 warp!
 translate
@@ -40,7 +47,8 @@ compose
 ## Temporal manipulations
 
 ```@docs
-medfilt
+tmedfilt
+tmedfilt!
 tinterpolate
 ```
 

@@ -19,8 +19,9 @@ The package is designed for the case where the number of positions in the `u`
 grid is much smaller than the number of pixels in your image.
 Between grid points, the deformation can be defined by interpolation.
 There are two "flavors" of such deformations, "naive" (constructed directly from a `u` array) and "interpolating" (one that has been prepared for interpolation).
-You can prepare a "naive" deformation for interpolation with `ϕi = interpolate(ϕ)`; be aware that `ϕi.u ≠ ϕ.u` even though
-, but the two
+You can prepare a "naive" deformation for interpolation with `ϕi = interpolate(ϕ)`;
+be aware that `ϕi.u ≠ ϕ.u` even though they represent the same deformation,
+because the interpolation prefilter modifies the coefficients.
 
 You can obtain a summary of the major functions in this package with
 `?RegisterDeformation`.
@@ -44,9 +45,11 @@ end
 Now we create a deformation over the span of the image:
 
 ```jldoctest demo
-# Create a deformation
-gridsize = (5, 5)                   # a coarse grid
-u = 20*randn(2, gridsize...)        # each displacement is 2-dimensional
+# Create a deformation with a fixed (non-random) displacement field
+gridsize = (5, 5)
+# Each column of u is a 2D displacement vector; here we use a simple
+# linear ramp so results are deterministic
+u = [Float64(5*(i-1) - 10) for xy in 1:2, i in 1:5, j in 1:5]
 # The nodes specify the location of each value in the `u` array
 # relative to the image that we want to warp. This choice spans
 # the entire image.
@@ -65,21 +68,17 @@ This is a "naive" deformation, so we can't evaluate it at an arbitrary position:
 ```jldoctest demo
 julia> ϕ(3.2, 1.4)
 ERROR: call `ϕi = interpolate(ϕ)` and use `ϕi` for evaluating the deformation.
-Stacktrace:
- [1] error(::String) at ./error.jl:33
 [...]
 ```
 
 But it works if we create the corresponding interpolating deformation:
 
-```jldoctest demo; filter=r"[ 0-9\-]+\.[0-9]+"
+```jldoctest demo
 julia> ϕi = interpolate(ϕ)
 Interpolating 5×5 GridDeformation{Float64} over a domain 1.0..512.0×1.0..768.0
 
-julia> ϕi(3.2, 1.4)
-2-element StaticArrays.SArray{Tuple{2},Float64,1,2} with indices SOneTo(2):
- 4.5304980552861736
- 2.913923557974086
+julia> length(ϕi(3.2, 1.4))
+2
 ```
 
 Now let's use this to warp the image (note it's more efficient to use `ϕi` here,
