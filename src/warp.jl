@@ -1,6 +1,8 @@
 """
-`wimg = warp(img, ϕ)` warps the array `img` according to the
-deformation `ϕ`.
+    warp(img, ϕ) -> Array
+
+Warp the array `img` according to the deformation `ϕ`. Returns an array of the
+same size and axes as `img`.
 """
 function warp(img::AbstractArray, ϕ::AbstractDeformation)
     wimg = WarpedArray(img, ϕ)
@@ -15,7 +17,9 @@ warp_type(img::AbstractArray{C}, ::Type{T}) where {C <: Colorant, T <: AbstractF
 warp_type(img::AbstractArray{C}, ::Type{T}) where {C <: Colorant, T} = base_colorant_type(C){Float32}
 
 """
-`warp!(dest, src::WarpedArray)` instantiates a `WarpedArray` in the output `dest`.
+    warp!(dest, src::WarpedArray) -> dest
+
+Instantiate the `WarpedArray` `src` into the pre-allocated array `dest`. Returns `dest`.
 """
 function warp!(dest::AbstractArray{T, N}, src::WarpedArray) where {T, N}
     axes(dest) == axes(src) || throw(DimensionMismatch("dest must have the same axes as src"))
@@ -32,8 +36,10 @@ function warp!(dest::AbstractArray{T, N}, src::WarpedArray) where {T, N}
 end
 
 """
-`warp!(dest, img, ϕ)` warps `img` using the deformation `ϕ`.  The
-result is stored in `dest`.
+    warp!(dest, img, ϕ) -> dest
+
+Warp `img` using the deformation `ϕ`, storing the result in the pre-allocated
+array `dest`. Returns `dest`.
 """
 function warp!(dest::AbstractArray, img::AbstractArray, ϕ::AbstractDeformation)
     wimg = WarpedArray(to_etp(img), ϕ)
@@ -41,7 +47,10 @@ function warp!(dest::AbstractArray, img::AbstractArray, ϕ::AbstractDeformation)
 end
 
 """
-`warp!(dest, img, tform, ϕ)` warps `img` using a combination of the affine transformation `tform` followed by deformation with `ϕ`.  The result is stored in `dest`.
+    warp!(dest, img, tform, ϕ) -> dest
+
+Warp `img` by applying the affine transformation `tform` followed by the deformation
+`ϕ`, storing the result in the pre-allocated array `dest`. Returns `dest`.
 """
 function warp!(dest::AbstractArray, img::AbstractArray, A::AffineMap, ϕ::AbstractDeformation)
     wimg = WarpedArray(to_etp(img, A), ϕ)
@@ -49,18 +58,16 @@ function warp!(dest::AbstractArray, img::AbstractArray, A::AffineMap, ϕ::Abstra
 end
 
 """
+    warp!(io, img, ϕs; eltype=Float32, nworkers=1)
+    warp!(io, img, uarray; eltype=Float32, nworkers=1)
 
-`warp!(io, img, ϕs; [eltype=Float32, nworkers=1])` writes warped images to
-disk. `io` is an `IO` object or HDF5/JLD2 dataset (the latter must be
-pre-allocated using `d_create` to be of the proper size). `img` is an
-image sequence, and `ϕs` is a vector of deformations, one per image in
-`img`.  `eltype` controls the element type written to disk.
-If `nworkers` is greater than one, it will spawn additional
-processes to perform the deformation.
+Write warped images to disk. `io` is an `IO` object or a pre-allocated HDF5/JLD2
+dataset. `img` is an image sequence and `ϕs` is a vector of deformations, one per
+image in `img`. `eltype` controls the element type written to disk. If `nworkers > 1`,
+additional worker processes are spawned to parallelize the deformation.
 
-An alternative syntax is `warp!(io, img, uarray; [eltype=Float32, nworkers=1])`,
-where `uarray` is an array of `u` values with `size(uarray)[end] ==
-nimages(img)`.
+In the second form, `uarray` is an array of displacement values with
+`size(uarray)[end] == nimages(img)`.
 """
 function warp!(dest::Union{IO, HDF5.Dataset, JLD2.JLDFile}, img, ϕs; eltype::Type = Float32, nworkers = 1)
     T = eltype
@@ -198,13 +205,11 @@ function warp_write(dest, destarray, i)
 end
 
 """
-`Atrans = translate(A, displacement)` shifts `A` by an amount
-specified by `displacement`.  Specifically, in simple cases `Atrans[i,
-j, ...] = A[i+displacement[1], j+displacement[2], ...]`.  More
-generally, `displacement` is applied only to the spatial coordinates
-of `A`.
+    translate(A, displacement) -> Array
 
-`NaN` is filled in for any missing pixels.
+Shift `A` by `displacement` applied to the spatial coordinates. In simple cases,
+`result[i, j, ...] = A[i+displacement[1], j+displacement[2], ...]`. Missing pixels
+are filled with `NaN`.
 """
 function translate(A::AbstractArray, displacement::Union{AbstractVector{<:Integer}, Dims})
     disp = zeros(Int, ndims(A))
