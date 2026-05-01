@@ -64,6 +64,13 @@ getcoefs(itp::Interpolations.BSplineInterpolation) = itp.coefs
 getcoefs(u::AbstractArray{<:SVector}) = u
 
 # Extensions to Interpolations and StaticArrays
+"""
+    vecindex(A, x::SVector) -> element
+
+Index into `A` at the position given by the `SVector` `x`, equivalent to
+`A[x[1], x[2], ...]`. For `AbstractInterpolation` objects the callable form
+is used instead of `getindex`.
+"""
 @generated function vecindex(A::AbstractArray, x::SVector{N}) where {N}
     args = [:(x[$d]) for d in 1:N]
     meta = Expr(:meta, :inline)
@@ -82,6 +89,13 @@ end
     end
 end
 
+"""
+    vecgradient!(g, itp, x::SVector)
+
+Compute the gradient of interpolation object `itp` at position `x` and store
+the result in `g`. Thin wrapper around `Interpolations.gradient!` that accepts
+an `SVector` position.
+"""
 @generated function vecgradient!(g, itp::AbstractArray, x::SVector{N}) where {N}
     args = [:(x[$d]) for d in 1:N]
     meta = Expr(:meta, :inline)
@@ -132,8 +146,18 @@ end
 #     :(SMatrix{Tuple{R,C},T}(($(args...),)))
 # end
 
-# Wrapping functions to interface with CoordinateTransfromations instead of AffineTransfroms module
+"""
+    tformeye(m) -> AffineMap
+
+Return the `m`-dimensional identity `AffineMap` (identity linear part, zero translation).
+"""
 tformeye(m::Int) = AffineMap(Matrix{Float64}(I, m, m), zeros(m))
+
+"""
+    tformtranslate(trans) -> AffineMap
+
+Return an `AffineMap` that translates by the vector `trans` (identity linear part).
+"""
 tformtranslate(trans::AbstractVector) = (m = length(trans); AffineMap(Matrix{Float64}(I, m, m), trans))
 
 """
@@ -143,11 +167,34 @@ Construct a 2D rotation matrix from `angle` (in radians). Returns a `RotMatrix`
 (from Rotations.jl), not an `AffineMap`. Use `tformrotate(angle)` to get an `AffineMap`.
 """
 rotation2(angle) = RotMatrix(angle)
+
+"""
+    tformrotate(angle) -> AffineMap
+    tformrotate(axis, angle) -> AffineMap
+    tformrotate(v) -> AffineMap
+
+Construct a rotation `AffineMap` (zero translation).
+
+- `tformrotate(angle)`: 2D rotation by `angle` radians.
+- `tformrotate(axis, angle)`: 3D rotation around `axis` (3-vector) by `angle` radians.
+- `tformrotate(v)`: 3D rotation where `norm(v)` is the angle and `v/norm(v)` is the axis.
+
+See also [`rotation2`](@ref), [`rotation3`](@ref).
+"""
 function tformrotate(angle)
     A = RotMatrix(angle)
     return AffineMap(A, zeros(eltype(A), 2))
 end
 
+"""
+    rotationparameters(R) -> Vector
+
+Extract the rotation parameters from a square rotation matrix `R`.
+
+- For a 2×2 matrix: returns a 1-element vector `[angle]` in radians.
+- For a 3×3 matrix: returns a 3-element axis-angle vector `angle * axis`
+  (magnitude encodes the angle, direction encodes the axis).
+"""
 function rotationparameters(R::AbstractMatrix)
     size(R, 1) == size(R, 2) || error("Matrix must be square")
     if size(R, 1) == 2

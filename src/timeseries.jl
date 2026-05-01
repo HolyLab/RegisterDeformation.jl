@@ -1,8 +1,9 @@
 """
-`ϕs = tinterpolate(ϕsindex, tindex, nstack)` uses linear
-interpolation/extrapolation in time to "fill out" to times `1:nstack`
-a deformation defined intermediate times `tindex` . Note that
-`ϕs[tindex] == ϕsindex`.
+    ϕs = tinterpolate(ϕsindex, tindex, nstack)
+
+Linearly interpolate/extrapolate a sparse set of deformations in time to fill
+all frames `1:nstack`. `ϕsindex` is the vector of known deformations defined at
+the integer time indices `tindex`. Satisfies `ϕs[tindex[i]] == ϕsindex[i]`.
 """
 function tinterpolate(ϕsindex, tindex, nstack)
     ϕs = Vector{eltype(ϕsindex)}(undef, nstack)

@@ -93,6 +93,17 @@ The major functions/types exported by RegisterDeformation are:
 """
 RegisterDeformation
 
+"""
+    AbstractDeformation{T,N}
+
+Supertype for N-dimensional deformations with displacement element type `T`.
+
+A deformation maps a point `x` to `x + u(x)`, where `u` is the displacement
+field. The concrete type `GridDeformation` represents `u` on a regular grid
+with interpolation between grid points.
+
+Use `eltype(ϕ)` and `ndims(ϕ)` to query the element type and dimensionality.
+"""
 abstract type AbstractDeformation{T, N} end
 Base.eltype(::Type{AbstractDeformation{T, N}}) where {T, N} = T
 Base.ndims(::Type{AbstractDeformation{T, N}}) where {T, N} = N

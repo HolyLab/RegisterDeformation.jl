@@ -113,9 +113,10 @@ function Base.show(io::IO, ϕ::GridDeformation{T}) where {T}
 end
 
 """
-`ϕs = griddeformations(u, nodes)` constructs a vector `ϕs` of
-seqeuential deformations.  The last dimension of the array `u` should
-correspond to time; `ϕs[i]` is produced from `u[:, ..., i]`.
+    ϕs = griddeformations(u, nodes)
+
+Construct a vector `ϕs` of sequential deformations. The last dimension of `u`
+corresponds to time; `ϕs[i]` is produced from `u[:, ..., i]`.
 """
 function griddeformations(u::AbstractArray{T}, nodes::NTuple{N}) where {N, T <: Number}
     ndims(u) == N + 2 || error("Need $(N + 2) dimensions for a vector of $N-dimensional deformations")
@@ -327,8 +328,20 @@ end
     return SVector(map(getindex, nodes, Tuple(I)))
 end
 
+"""
+    arraysize(nodes) -> NTuple
+
+Return the array size implied by `nodes`, where each element of the tuple is
+`Int(maximum(n) - minimum(n) + 1)` for the corresponding node range `n`.
+"""
 arraysize(nodes::NTuple) = map(n -> Int(maximum(n) - minimum(n) + 1), nodes)
 
+"""
+    NodeIterator{K,N}
+
+Iterator returned by [`eachnode`](@ref) that visits each node of a deformation
+grid as an `SVector`. Supports `length`, `size`, and `collect`.
+"""
 struct NodeIterator{K, N}
     nodes::K
     iter::CartesianIndices{N}
@@ -336,8 +349,19 @@ end
 
 """
     iter = eachnode(ϕ)
+    iter = eachnode(nodes)
 
-Create an iterator for visiting all the nodes of `ϕ`.
+Create an iterator that visits each node of `ϕ` (or `nodes`) as an `SVector`.
+The iteration order follows column-major (first index varies fastest).
+
+# Example
+
+```julia
+ϕ = GridDeformation(zeros(SVector{2,Float64}, 3, 4), (1:3, 1:4))
+for x in eachnode(ϕ)
+    # x is an SVector{2,Float64}
+end
+```
 """
 eachnode(ϕ::GridDeformation) = eachnode(ϕ.nodes)
 eachnode(nodes) = NodeIterator(nodes, CartesianIndices(map(length, nodes)))
@@ -417,9 +441,14 @@ function compose(ϕ_old::GridDeformation{T1, N, A}, ϕ_new::GridDeformation{T2, 
 end
 
 """
-`ϕsi_old` and `ϕs_new` will generate `ϕs_c` vector and `g` vector
-`ϕsi_old` is interpolated ``ϕs_old`:
-e.g) `ϕsi_old = map(Interpolations.interpolate!, copy(ϕs_old))`
+    result = compose(ϕsi_old, ϕs_new)
+
+Compose two equal-length vectors of deformations element-wise.
+`ϕsi_old` must be a vector of interpolating deformations (see [`interpolate!`](@ref)).
+Returns a named tuple `(; ϕ, gradient)` where `ϕ` is the vector of composed
+deformations and `gradient` is the corresponding vector of Jacobian arrays.
+
+See also the two-argument scalar form [`compose(ϕ_old, ϕ_new)`](@ref).
 """
 function compose(ϕsi_old::AbstractVector{G1}, ϕs_new::AbstractVector{G2}) where {G1 <: GridDeformation, G2 <: GridDeformation}
     n = length(ϕs_new)

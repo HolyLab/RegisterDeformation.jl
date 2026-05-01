@@ -1,20 +1,14 @@
 ### WarpedArray
 """
-A `WarpedArray` `W` is an AbstractArray for which `W[x] = A[ϕ(x)]` for
-some parent array `A` and some deformation `ϕ`.  The object is created
-lazily, meaning that computation of the displaced values occurs only
-when you ask for them explicitly.
+    W = WarpedArray(A, ϕ)
 
-Create a `WarpedArray` like this:
+Lazy array for which `W[x] = A[ϕ(x)]`, where `A` is the source array and `ϕ`
+is an `AbstractDeformation`. Indexing is evaluated on demand.
 
-```
-W = WarpedArray(A, ϕ)
-```
-where
+`A` can be any array; it is automatically wrapped in an extrapolation object
+so that out-of-bounds accesses return `NaN` rather than throwing an error.
 
-- The first argument `A` is an `AbstractExtrapolation` that can be
-  evaluated anywhere.  See the Interpolations package.
-- ϕ is an `AbstractDeformation`
+See also [`warp`](@ref), [`warp!`](@ref), [`getindex!`](@ref).
 """
 struct WarpedArray{T, N, A <: Extrapolatable, D <: AbstractDeformation} <: AbstractArray{T, N}
     data::A
@@ -49,6 +43,13 @@ Base.axes(A::WarpedArray, i::Integer) = axes(A.data, i)
     return W.data(ϕx...)
 end
 
+"""
+    getindex!(dest, W::WarpedArray, coords...)
+
+Fill `dest` with values from the `WarpedArray` `W` at the Cartesian product of
+`coords`. Each element of `coords` specifies the indices along one dimension.
+Returns `dest`.
+"""
 function ImageAxes.getindex!(dest, W::WarpedArray{T, N}, coords::Vararg{Any, N}) where {T, N}
     for (i, c) in zip(LinearIndices(dest), Iterators.product(coords...))
         dest[i] = W[c...]
