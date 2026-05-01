@@ -2,6 +2,7 @@
 using RegisterDeformation
 using RegisterDeformation: arraysize
 using CoordinateTransformations, Interpolations, ImageCore, ForwardDiff
+using Rotations: rotation_angle
 using StaticArrays, LinearAlgebra, Distributed, Statistics
 using AxisArrays: AxisArray
 using OffsetArrays
