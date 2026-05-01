@@ -1,5 +1,6 @@
 using Documenter
 using RegisterDeformation
+using ImageAxes
 
 makedocs(
     sitename = "RegisterDeformation",

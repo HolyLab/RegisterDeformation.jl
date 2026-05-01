@@ -8,7 +8,7 @@ is an `AbstractDeformation`. Indexing is evaluated on demand.
 `A` can be any array; it is automatically wrapped in an extrapolation object
 so that out-of-bounds accesses return `NaN` rather than throwing an error.
 
-See also [`warp`](@ref), [`warp!`](@ref), [`getindex!`](@ref).
+See also [`warp`](@ref), [`warp!`](@ref), [`ImageAxes.getindex!`](@ref).
 """
 struct WarpedArray{T, N, A <: Extrapolatable, D <: AbstractDeformation} <: AbstractArray{T, N}
     data::A
