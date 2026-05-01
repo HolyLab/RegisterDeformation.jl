@@ -1,17 +1,16 @@
 export TransformedArray
 
 """
-A `TransformedArray` is an `AbstractArray` type with an affine
-coordinate shift: `A[i,j]` evaluates the "parent" array `P` used to
-construct `A` at a location `x,y` given by `[x, y] = tfm*[i,j]`.  It
-therefore allows you to use lazy-evaluation to perform affine
-coordinate transformations.
+    A = TransformedArray(etp, tfm)
 
-```
-A = TransformedArray(etp, tfm)
-```
-where `etp` is an extrapolation object as defined by the
-Interpolations package, and `tfm` is an `AffineMap`.
+Lazy array that applies an affine coordinate transformation on access:
+`A[i,j]` evaluates the parent array `etp` at the transformed coordinates
+`[x, y] = tfm([i, j])`.
+
+`etp` can be an `AbstractExtrapolation`, `AbstractInterpolation`, or plain
+`AbstractArray` (automatically wrapped). `tfm` is an `AffineMap`.
+
+See also [`transform`](@ref), [`transform!`](@ref).
 """
 struct TransformedArray{T, N, E <: AbstractExtrapolation, Tf <: AffineMap} <: AbstractArray{T, N}
     data::E
@@ -48,22 +47,19 @@ end
 Base.similar(A::TransformedArray, ::Type{T}, dims::Dims) where {T} = Array{T}(undef, dims)
 
 """
-`transform(A, tfm; origin_dest=center(A), origin_src=center(A)`
-computes the transformed `A` over its entire domain.  By default the
-transformation is assumed to operate around the center of the input
-array, and output coordinates are referenced relative to the center of
-the output.
+    transform(A::TransformedArray; origin_dest=center(A), origin_src=center(A)) -> Array
+    transform(A, tfm::AffineMap; origin_dest=center(A), origin_src=center(A)) -> Array
 
-If `A` is a TransformedArray, then the syntax is just `transform(A;
-origin_dest=center(A), origin_src=center(A))`. This is different from
-the behavior of `A[:,:]`, which assumes the origin of coordinates to
-be all-zeros.  To obtain behavior equivalent to `getindex`, supply
-zero-vectors for both of them. Alternatively to make `getindex` behave
-as `transform`, offset the origin of the transform used to construct
-`A` by
-```
-origin_src - tform.linear*origin_dest
-```
+Materialize the transformed array `A` over its entire domain. By default the
+transformation is assumed to operate around the center of the input array, and
+output coordinates are referenced relative to the center of the output.
+
+The two-argument form wraps `A` in a `TransformedArray` first. The `getindex`
+behavior (`A[i,j]`) assumes the origin at zero; to match it, pass
+`origin_src = zeros(N)` and `origin_dest = zeros(N)`, or equivalently offset
+the transform by `origin_src - tfm.linear * origin_dest`.
+
+See also [`transform!`](@ref).
 """
 function transform(A::TransformedArray{T, N}; kwargs...) where {T, N}
     y = A.tform(ones(Int, N))
@@ -77,12 +73,11 @@ end
 transform(A, a::AffineMap; kwargs...) = transform(TransformedArray(A, a); kwargs...)
 
 """
-`transform!(dest, src, tfm; origin_dest=center(dest),
-origin_src=center(src))` is like `transform`, but using a
-pre-allocated output array `dest`.
+    transform!(dest, src::TransformedArray; origin_dest=center(dest), origin_src=center(src)) -> dest
+    transform!(dest, src, tfm::AffineMap; origin_dest=center(dest), origin_src=center(src)) -> dest
 
-If `src` is already a TransformedArray, use `transform!(dest, src;
-kwargs...)`.
+In-place version of [`transform`](@ref). Writes the result into the
+pre-allocated array `dest` and returns it.
 """
 function transform!(
         dest::AbstractArray{S, N},
