@@ -43,7 +43,9 @@ function Base.getindex(A::TransformedArray{T, 3}, i::Number, j::Number, k::Numbe
     return A.data(x, y, z)
 end
 
-Base.similar(A::TransformedArray, ::Type{T}, dims::Dims) where {T} = Array{T}(dims)
+(A::TransformedArray)(args::Number...) = A[args...]
+
+Base.similar(A::TransformedArray, ::Type{T}, dims::Dims) where {T} = Array{T}(undef, dims)
 
 """
 `transform(A, tfm; origin_dest=center(A), origin_src=center(A)`

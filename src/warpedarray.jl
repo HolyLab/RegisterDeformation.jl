@@ -49,5 +49,9 @@ Base.axes(A::WarpedArray, i::Integer) = axes(A.data, i)
     return W.data(ϕx...)
 end
 
-ImageAxes.getindex!(dest, W::WarpedArray{T, N}, coords::Vararg{Any, N}) where {T, N} =
-    copyto!(dest, view(W, coords...))
+function ImageAxes.getindex!(dest, W::WarpedArray{T, N}, coords::Vararg{Any, N}) where {T, N}
+    for (i, c) in zip(LinearIndices(dest), Iterators.product(coords...))
+        dest[i] = W[c...]
+    end
+    return dest
+end
