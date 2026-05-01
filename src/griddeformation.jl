@@ -342,6 +342,10 @@ Create an iterator for visiting all the nodes of `ϕ`.
 eachnode(ϕ::GridDeformation) = eachnode(ϕ.nodes)
 eachnode(nodes) = NodeIterator(nodes, CartesianIndices(map(length, nodes)))
 
+Base.length(ki::NodeIterator) = length(ki.iter)
+Base.size(ki::NodeIterator) = size(ki.iter)
+Base.IteratorSize(::Type{NodeIterator{K,N}}) where {K,N} = Base.HasShape{N}()
+
 function Base.iterate(ki::NodeIterator)
     iterate(ki.iter) == nothing && return nothing
     I, state = iterate(ki.iter)

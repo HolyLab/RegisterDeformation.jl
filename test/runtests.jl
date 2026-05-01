@@ -529,6 +529,100 @@ end
     @test At[:, 1:2] == A[:, 2:3]
 end
 
+@testset "AbstractDeformation interface" begin
+    ϕ = GridDeformation(rand(SVector{2,Float64}, 3, 3), (1:3, 1:3))
+    @test eltype(ϕ) == Float64
+    @test ndims(ϕ) == 2
+    @test occursin("GridDeformation", repr(ϕ))
+    nodes = collect(eachnode(ϕ))
+    @test length(nodes) == 9
+    @test nodes[1] isa SVector{2}
+end
+
+@testset "WarpedArray interface" begin
+    p = (1:100) .- 5
+    ϕ = GridDeformation([0.0, 0.0]', axes(p))
+    q = WarpedArray(p, ϕ)
+    @test size(q, 1) == size(q)[1]
+    @test axes(q, 1) == axes(q)[1]
+end
+
+@testset "Error paths" begin
+    ϕ = GridDeformation(rand(SVector{1,Float64}, 5), (1:5,))
+    ϕi = interpolate(ϕ)
+    @test_throws ErrorException interpolate(ϕi)
+    @test_throws ErrorException interpolate!(ϕi)
+    ϕraw = GridDeformation(rand(SVector{1,Float64}, 5), (1:5,))
+    @test_throws ErrorException ϕraw(3.0)
+    @test_throws ErrorException ϕraw(ϕi)
+    ϕe = extrapolate!(copy(ϕi))  # already-interpolating ϕ triggers the error path
+    @test ϕe isa GridDeformation
+end
+
+@testset "translate" begin
+    A = reshape(1:16, 4, 4)
+    B = translate(A, [1, 0])
+    @test B[1, 1] ≈ 2
+end
+
+@testset "3D rotations" begin
+    axis = [0.0, 0.0, 1.0]
+    R = rotation3(axis, π/4)
+    @test rotationparameters(Matrix(R)) ≈ π/4 * axis
+    R2 = rotation3(π/4 * axis)
+    @test rotation_angle(R2) ≈ π/4
+    tform = tformrotate(axis, π/4)
+    @test tform isa AffineMap
+    tform2 = tformrotate(π/4 * axis)
+    @test tform2 isa AffineMap
+end
+
+@testset "warp with AffineMap" begin
+    img = rand(10, 10)
+    tform = tformeye(2)
+    ϕ = tform2deformation(tformeye(2), axes(img), (3, 3))
+    dest = similar(img)
+    warp!(dest, img, tform, ϕ)
+    @test dest ≈ img atol=0.01
+end
+
+@testset "warp_type" begin
+    @test RegisterDeformation.warp_type(zeros(Int, 3)) == Float32
+    img_gray = zeros(Gray{Float32}, 3, 3)
+    @test RegisterDeformation.warp_type(img_gray) == Gray{Float32}
+end
+
+@testset "TransformedArray 3D" begin
+    A = rand(5, 5, 5)
+    tform = tformeye(3)
+    TA = TransformedArray(A, tform)
+    @test TA[3, 3, 3] ≈ A[3, 3, 3] atol=0.01
+    @test similar(TA, Float32, (3, 3)) isa Array{Float32, 2}
+end
+
+@testset "transform! identity fast path" begin
+    A = rand(5, 5)
+    tform = tformeye(2)
+    itp = interpolate(A, BSpline(Linear()))
+    TA = TransformedArray(extrapolate(itp, NaN), tform)
+    dest = similar(A)
+    transform!(dest, TA)
+    @test dest ≈ A atol=0.01
+end
+
+@testset "compose vector" begin
+    ϕ = GridDeformation(zeros(SVector{2,Float64}, 3, 3), (1:3, 1:3))
+    ϕi = interpolate!(copy(ϕ))
+    result = compose([ϕi, ϕi], [ϕ, ϕ])
+    @test length(result.ϕ) == 2
+end
+
+@testset "tmedfilt window>=5" begin
+    ϕs = [GridDeformation(zeros(SVector{1,Float64}, 3), (1:3,)) for _ in 1:6]
+    out = tmedfilt(ϕs, 5)
+    @test length(out) == 6
+end
+
 # warp!(dest::Union{IO,HDF5.Dataset,JLD2.JLDFile}, ...) extends ImageTransformations.warp!
 # without any RegisterDeformation-owned argument types — intentional piracy for batch I/O.
 @testset "Aqua" begin
