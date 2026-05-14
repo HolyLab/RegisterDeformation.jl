@@ -1,6 +1,6 @@
 name = "RegisterDeformation"
 uuid = "c19381b7-cf49-59d7-881c-50dfbd227eaf"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["Tim Holy <tim.holy@gmail.com>"]
 
 [deps]
@@ -45,7 +45,7 @@ LinearAlgebra = "1"
 OffsetArrays = "0.10, 0.11, 1"
 Pkg = "1"
 ProgressMeter = "1"
-RegisterUtilities = "0.1, 1"
+RegisterUtilities = "1"
 Requires = "0.5, 1"
 Rotations = "0.9, 0.10, 0.11, 0.12, 0.13, 1"
 SharedArrays = "1"
